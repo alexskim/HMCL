@@ -1,6 +1,6 @@
 /*
  * Hello Minecraft! Launcher
- * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
+ * Copyright (C) 2020  huangyuhui <huanghongxun2008@126.com> and contributors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -22,9 +22,9 @@ import org.jackhuang.hmcl.game.AssetIndexInfo;
 import org.jackhuang.hmcl.game.Version;
 import org.jackhuang.hmcl.task.FileDownloadTask;
 import org.jackhuang.hmcl.task.Task;
-import org.jackhuang.hmcl.util.io.NetworkUtils;
 
 import java.io.File;
+import java.io.IOException;
 import java.util.LinkedList;
 import java.util.List;
 
@@ -63,10 +63,15 @@ public final class GameAssetIndexDownloadTask extends Task<Void> {
 
         // We should not check the hash code of asset index file since this file is not consistent
         // And Mojang will modify this file anytime. So assetIndex.hash might be outdated.
-        dependencies.add(new FileDownloadTask(
-                NetworkUtils.toURL(dependencyManager.getDownloadProvider().injectURL(assetIndexInfo.getUrl())),
+        FileDownloadTask task = new FileDownloadTask(
+                dependencyManager.getDownloadProvider().injectURLWithCandidates(assetIndexInfo.getUrl()),
                 assetIndexFile
-        ).setCacheRepository(dependencyManager.getCacheRepository()));
+        );
+        task.setCacheRepository(dependencyManager.getCacheRepository());
+        dependencies.add(task);
     }
 
+
+    public static class GameAssetIndexMalformedException extends IOException {
+    }
 }

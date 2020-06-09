@@ -1,6 +1,6 @@
 /*
  * Hello Minecraft! Launcher
- * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
+ * Copyright (C) 2020  huangyuhui <huanghongxun2008@126.com> and contributors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -18,6 +18,7 @@
 package org.jackhuang.hmcl.game;
 
 import com.google.gson.JsonParseException;
+import org.jackhuang.hmcl.download.MaintainTask;
 import org.jackhuang.hmcl.download.game.VersionJsonSaveTask;
 import org.jackhuang.hmcl.event.Event;
 import org.jackhuang.hmcl.event.EventBus;
@@ -29,12 +30,15 @@ import org.jackhuang.hmcl.event.RemoveVersionEvent;
 import org.jackhuang.hmcl.event.RenameVersionEvent;
 import org.jackhuang.hmcl.mod.ModManager;
 import org.jackhuang.hmcl.task.Task;
+import org.jackhuang.hmcl.util.Lang;
 import org.jackhuang.hmcl.util.ToStringBuilder;
 import org.jackhuang.hmcl.util.gson.JsonUtils;
 import org.jackhuang.hmcl.util.io.FileUtils;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.Collection;
@@ -93,20 +97,33 @@ public class DefaultGameRepository implements GameRepository {
     }
 
     @Override
+    public File getLibrariesDirectory(Version version) {
+        return new File(getBaseDirectory(), "libraries");
+    }
+
+    @Override
     public File getLibraryFile(Version version, Library lib) {
-        if ("local".equals(lib.getHint()))
+        if ("local".equals(lib.getHint()) && lib.getFileName() != null)
             return new File(getVersionRoot(version.getId()), "libraries/" + lib.getFileName());
         else
-            return new File(getBaseDirectory(), "libraries/" + lib.getPath());
+            return new File(getLibrariesDirectory(version), lib.getPath());
     }
 
     public Path getArtifactFile(Version version, Artifact artifact) {
         return artifact.getPath(getBaseDirectory().toPath().resolve("libraries"));
     }
 
+    public GameDirectoryType getGameDirectoryType(String id) {
+        return GameDirectoryType.ROOT_FOLDER;
+    }
+
     @Override
     public File getRunDirectory(String id) {
-        return getBaseDirectory();
+        switch (getGameDirectoryType(id)) {
+            case VERSION_FOLDER: return getVersionRoot(id);
+            case ROOT_FOLDER: return getBaseDirectory();
+            default: throw new IllegalStateException();
+        }
     }
 
     @Override
@@ -118,7 +135,7 @@ public class DefaultGameRepository implements GameRepository {
 
     @Override
     public File getNativeDirectory(String id) {
-        return new File(getVersionRoot(id), id + "-natives");
+        return new File(getVersionRoot(id), "natives");
     }
 
     @Override
@@ -145,28 +162,40 @@ public class DefaultGameRepository implements GameRepository {
 
         try {
             Version fromVersion = getVersion(from);
-            File fromDir = getVersionRoot(from);
-            File toDir = getVersionRoot(to);
-            if (!fromDir.renameTo(toDir))
-                return false;
+            Path fromDir = getVersionRoot(from).toPath();
+            Path toDir = getVersionRoot(to).toPath();
+            Files.move(fromDir, toDir);
 
-            File toJson = new File(toDir, to + ".json");
-            File toJar = new File(toDir, to + ".jar");
+            Path fromJson = toDir.resolve(from + ".json");
+            Path fromJar = toDir.resolve(from + ".jar");
+            Path toJson = toDir.resolve(to + ".json");
+            Path toJar = toDir.resolve(to + ".jar");
 
-            if (!new File(toDir, from + ".json").renameTo(toJson)
-                    || !new File(toDir, from + ".jar").renameTo(toJar)) {
+            try {
+                Files.move(fromJson, toJson);
+                Files.move(fromJar, toJar);
+            } catch (IOException e) {
                 // recovery
-                toJson.renameTo(new File(toDir, from + ".json"));
-                toJar.renameTo(new File(toDir, from + ".jar"));
-                toDir.renameTo(fromDir);
-                return false;
+                Lang.ignoringException(() -> Files.move(toJson, fromJson));
+                Lang.ignoringException(() -> Files.move(toJar, fromJar));
+                Lang.ignoringException(() -> Files.move(toDir, fromDir));
+                throw e;
             }
 
             if (fromVersion.getId().equals(fromVersion.getJar()))
                 fromVersion = fromVersion.setJar(null);
-            FileUtils.writeText(toJson, JsonUtils.GSON.toJson(fromVersion.setId(to)));
+            FileUtils.writeText(toJson.toFile(), JsonUtils.GSON.toJson(fromVersion.setId(to)));
+
+            // fix inheritsFrom of versions that inherits from version [from].
+            for (Version version : getVersions()) {
+                if (from.equals(version.getInheritsFrom())) {
+                    File json = getVersionJson(version.getId()).getAbsoluteFile();
+                    FileUtils.writeText(json, JsonUtils.GSON.toJson(version.setInheritsFrom(to)));
+                }
+            }
             return true;
-        } catch (IOException | JsonParseException | VersionNotFoundException e) {
+        } catch (IOException | JsonParseException | VersionNotFoundException | InvalidPathException e) {
+            LOG.log(Level.WARNING, "Unable to rename version " + from + " to " + to, e);
             return false;
         }
     }
@@ -392,8 +421,12 @@ public class DefaultGameRepository implements GameRepository {
         return assetsDir;
     }
 
-    public Task<Version> save(Version version) {
-        return new VersionJsonSaveTask(this, version);
+    public Task<Version> saveAsync(Version version) {
+        if (version.isResolvedPreservingPatches()) {
+            return new VersionJsonSaveTask(this, MaintainTask.maintainPreservingPatches(this, version));
+        } else {
+            return new VersionJsonSaveTask(this, version);
+        }
     }
 
     public boolean isLoaded() {

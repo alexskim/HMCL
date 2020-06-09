@@ -1,6 +1,6 @@
 /*
  * Hello Minecraft! Launcher
- * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
+ * Copyright (C) 2020  huangyuhui <huanghongxun2008@126.com> and contributors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,19 +20,11 @@ package org.jackhuang.hmcl.download.optifine;
 import org.jackhuang.hmcl.download.DefaultDependencyManager;
 import org.jackhuang.hmcl.download.LibraryAnalyzer;
 import org.jackhuang.hmcl.download.VersionMismatchException;
-import org.jackhuang.hmcl.game.Arguments;
-import org.jackhuang.hmcl.game.Artifact;
-import org.jackhuang.hmcl.game.DefaultGameRepository;
-import org.jackhuang.hmcl.game.GameVersion;
-import org.jackhuang.hmcl.game.LibrariesDownloadInfo;
-import org.jackhuang.hmcl.game.Library;
-import org.jackhuang.hmcl.game.LibraryDownloadInfo;
-import org.jackhuang.hmcl.game.Version;
+import org.jackhuang.hmcl.game.*;
 import org.jackhuang.hmcl.task.FileDownloadTask;
 import org.jackhuang.hmcl.task.Task;
 import org.jackhuang.hmcl.util.io.CompressingUtils;
 import org.jackhuang.hmcl.util.io.FileUtils;
-import org.jackhuang.hmcl.util.io.NetworkUtils;
 import org.jackhuang.hmcl.util.platform.JavaVersion;
 import org.jackhuang.hmcl.util.platform.SystemUtils;
 import org.jenkinsci.constant_pool_scanner.ConstantPool;
@@ -46,8 +38,6 @@ import java.nio.file.FileSystem;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
-import java.util.stream.Collectors;
-
 import static org.jackhuang.hmcl.util.Lang.getOrDefault;
 
 /**
@@ -88,7 +78,7 @@ public final class OptiFineInstallTask extends Task<Version> {
                 new Artifact("optifine", "OptiFine", mavenVersion, "installer"), null,
                 new LibrariesDownloadInfo(new LibraryDownloadInfo(
                         "optifine/OptiFine/" + mavenVersion + "/OptiFine-" + mavenVersion + "-installer.jar",
-                        remote.getUrl()[0]))
+                        remote.getUrls().get(0).toString()))
         );
     }
 
@@ -102,11 +92,12 @@ public final class OptiFineInstallTask extends Task<Version> {
         dest = Files.createTempFile("optifine-installer", ".jar");
 
         if (installer == null) {
-            dependents.add(new FileDownloadTask(
-                    Arrays.stream(remote.getUrl()).map(NetworkUtils::toURL).collect(Collectors.toList()),
-                    dest.toFile(), null)
-                    .setCacheRepository(dependencyManager.getCacheRepository())
-                    .setCaching(true));
+            FileDownloadTask task = new FileDownloadTask(
+                    dependencyManager.getDownloadProvider().injectURLsWithCandidates(remote.getUrls()),
+                    dest.toFile(), null);
+            task.setCacheRepository(dependencyManager.getCacheRepository());
+            task.setCaching(true);
+            dependents.add(task);
         } else {
             FileUtils.copyFile(installer, dest);
         }
@@ -129,6 +120,10 @@ public final class OptiFineInstallTask extends Task<Version> {
 
     @Override
     public void execute() throws Exception {
+        String originalMainClass = version.resolve(dependencyManager.getGameRepository()).getMainClass();
+        if (!LibraryAnalyzer.VANILLA_MAIN.equals(originalMainClass) && !LibraryAnalyzer.LAUNCH_WRAPPER_MAIN.equals(originalMainClass) && !LibraryAnalyzer.MOD_LAUNCHER_MAIN.equals(originalMainClass))
+            throw new OptiFineInstallTask.UnsupportedOptiFineInstallationException();
+
         List<Library> libraries = new LinkedList<>();
         libraries.add(optiFineLibrary);
 
@@ -151,6 +146,16 @@ public final class OptiFineInstallTask extends Task<Version> {
                     throw new IOException("OptiFine patcher failed");
             } else {
                 FileUtils.copyFile(dest, gameRepository.getLibraryFile(version, optiFineLibrary).toPath());
+            }
+
+            Path launchWrapper2 = fs.getPath("launchwrapper-2.0.jar");
+            if (Files.exists(launchWrapper2)) {
+                Library launchWrapper = new Library(new Artifact("optifine", "launchwrapper", "2.0"));
+                File launchWrapperFile = gameRepository.getLibraryFile(version, launchWrapper);
+                FileUtils.makeDirectory(launchWrapperFile.getAbsoluteFile().getParentFile());
+                FileUtils.copyFile(launchWrapper2, launchWrapperFile.toPath());
+                hasLaunchWrapper = true;
+                libraries.add(launchWrapper);
             }
 
             Path launchWrapperVersionText = fs.getPath("launchwrapper-of.txt");
@@ -180,11 +185,11 @@ public final class OptiFineInstallTask extends Task<Version> {
                 remote.getSelfVersion(),
                 10000,
                 new Arguments().addGameArguments("--tweakClass", "optifine.OptiFineTweaker"),
-                "net.minecraft.launchwrapper.Launch",
+                LibraryAnalyzer.LAUNCH_WRAPPER_MAIN,
                 libraries
         ));
 
-        dependencies.add(dependencyManager.checkLibraryCompletionAsync(getResult()));
+        dependencies.add(dependencyManager.checkLibraryCompletionAsync(getResult(), true));
     }
 
     public static class UnsupportedOptiFineInstallationException extends Exception {
@@ -222,7 +227,7 @@ public final class OptiFineInstallTask extends Task<Version> {
                 throw new VersionMismatchException(mcVersion, gameVersion.get());
 
             return new OptiFineInstallTask(dependencyManager, version,
-                    new OptiFineRemoteVersion(mcVersion,  ofEdition + "_" + ofRelease, "", false), installer);
+                    new OptiFineRemoteVersion(mcVersion,  ofEdition + "_" + ofRelease, Collections.singletonList(""), false), installer);
         }
     }
 }

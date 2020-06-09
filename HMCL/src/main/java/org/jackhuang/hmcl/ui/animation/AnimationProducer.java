@@ -1,6 +1,6 @@
 /*
  * Hello Minecraft! Launcher
- * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
+ * Copyright (C) 2020  huangyuhui <huanghongxun2008@126.com> and contributors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -18,6 +18,7 @@
 package org.jackhuang.hmcl.ui.animation;
 
 import javafx.animation.KeyFrame;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
 
@@ -25,4 +26,6 @@ public interface AnimationProducer {
     void init(AnimationHandler handler);
 
     List<KeyFrame> animate(AnimationHandler handler);
+
+    @Nullable AnimationProducer opposite();
 }

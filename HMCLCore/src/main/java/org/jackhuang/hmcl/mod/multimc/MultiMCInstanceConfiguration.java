@@ -1,6 +1,6 @@
 /*
  * Hello Minecraft! Launcher
- * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
+ * Copyright (C) 2020  huangyuhui <huanghongxun2008@126.com> and contributors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -30,6 +30,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Optional;
 import java.util.Properties;
+import java.util.stream.Stream;
 
 /**
  *
@@ -334,10 +335,12 @@ public final class MultiMCInstanceConfiguration {
 
     public static Path getRootPath(Path root) throws IOException {
         if (testPath(root)) return root;
-        Path candidate = Files.list(root).filter(Files::isDirectory).findAny()
-                .orElseThrow(() -> new IOException("Not a valid MultiMC modpack"));
-        if (testPath(candidate)) return candidate;
-        throw new IOException("Not a valid MultiMC modpack");
+        try (Stream<Path> stream = Files.list(root)) {
+            Path candidate = stream.filter(Files::isDirectory).findAny()
+                    .orElseThrow(() -> new IOException("Not a valid MultiMC modpack"));
+            if (testPath(candidate)) return candidate;
+            throw new IOException("Not a valid MultiMC modpack");
+        }
     }
 
     public static Modpack readMultiMCModpackManifest(Path modpackFile, Charset encoding) throws IOException {
@@ -349,8 +352,10 @@ public final class MultiMCInstanceConfiguration {
             Path instancePath = root.resolve("instance.cfg");
             if (Files.notExists(instancePath))
                 throw new IOException("`instance.cfg` not found, " + modpackFile + " is not a valid MultiMC modpack.");
-            MultiMCInstanceConfiguration cfg = new MultiMCInstanceConfiguration(name, Files.newInputStream(instancePath), manifest);
-            return new Modpack(cfg.getName(), "", "", cfg.getGameVersion(), cfg.getNotes(), encoding, cfg);
+            try (InputStream instanceStream = Files.newInputStream(instancePath)) {
+                MultiMCInstanceConfiguration cfg = new MultiMCInstanceConfiguration(name, instanceStream, manifest);
+                return new Modpack(cfg.getName(), "", "", cfg.getGameVersion(), cfg.getNotes(), encoding, cfg);
+            }
         }
     }
 }

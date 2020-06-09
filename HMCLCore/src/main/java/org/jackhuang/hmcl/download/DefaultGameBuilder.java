@@ -1,6 +1,6 @@
 /*
  * Hello Minecraft! Launcher
- * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
+ * Copyright (C) 2020  huangyuhui <huanghongxun2008@126.com> and contributors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,6 +21,8 @@ import org.jackhuang.hmcl.game.Version;
 import org.jackhuang.hmcl.task.Task;
 import org.jackhuang.hmcl.util.function.ExceptionalFunction;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -30,36 +32,38 @@ import java.util.Map;
 public class DefaultGameBuilder extends GameBuilder {
 
     private final DefaultDependencyManager dependencyManager;
-    private final DownloadProvider downloadProvider;
 
     public DefaultGameBuilder(DefaultDependencyManager dependencyManager) {
         this.dependencyManager = dependencyManager;
-        this.downloadProvider = dependencyManager.getDownloadProvider();
     }
 
     public DefaultDependencyManager getDependencyManager() {
         return dependencyManager;
     }
 
-    public DownloadProvider getDownloadProvider() {
-        return downloadProvider;
-    }
-
     @Override
     public Task<?> buildAsync() {
+        List<String> stages = new ArrayList<>();
+
         Task<Version> libraryTask = Task.supplyAsync(() -> new Version(name));
         libraryTask = libraryTask.thenComposeAsync(libraryTaskHelper(gameVersion, "game", gameVersion));
+        stages.add("hmcl.install.game:" + gameVersion);
+        stages.add("hmcl.install.assets");
 
-        for (Map.Entry<String, String> entry : toolVersions.entrySet())
+        for (Map.Entry<String, String> entry : toolVersions.entrySet()) {
             libraryTask = libraryTask.thenComposeAsync(libraryTaskHelper(gameVersion, entry.getKey(), entry.getValue()));
+            stages.add(String.format("hmcl.install.%s:%s", entry.getKey(), entry.getValue()));
+        }
 
-        for (RemoteVersion remoteVersion : remoteVersions)
-            libraryTask = libraryTask.thenComposeAsync(dependencyManager.installLibraryAsync(remoteVersion));
+        for (RemoteVersion remoteVersion : remoteVersions) {
+            libraryTask = libraryTask.thenComposeAsync(version -> dependencyManager.installLibraryAsync(version, remoteVersion));
+            stages.add(String.format("hmcl.install.%s:%s", remoteVersion.getLibraryId(), remoteVersion.getSelfVersion()));
+        }
 
-        return libraryTask.whenComplete(exception -> {
+        return libraryTask.thenComposeAsync(dependencyManager.getGameRepository()::saveAsync).whenComplete(exception -> {
             if (exception != null)
                 dependencyManager.getGameRepository().removeVersionFromDisk(name);
-        });
+        }).withStagesHint(stages);
     }
 
     private ExceptionalFunction<Version, Task<Version>, ?> libraryTaskHelper(String gameVersion, String libraryId, String libraryVersion) {

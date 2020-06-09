@@ -1,6 +1,6 @@
 /*
  * Hello Minecraft! Launcher
- * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
+ * Copyright (C) 2020  huangyuhui <huanghongxun2008@126.com> and contributors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -18,14 +18,13 @@
 package org.jackhuang.hmcl.ui.construct;
 
 import com.jfoenix.controls.JFXButton;
-import com.jfoenix.controls.JFXProgressBar;
 import javafx.application.Platform;
-import javafx.beans.binding.Bindings;
 import javafx.beans.property.StringProperty;
 import javafx.fxml.FXML;
 import javafx.scene.control.Label;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.StackPane;
+import org.jackhuang.hmcl.task.FileDownloadTask;
 import org.jackhuang.hmcl.task.TaskExecutor;
 import org.jackhuang.hmcl.task.TaskListener;
 import org.jackhuang.hmcl.ui.FXUtils;
@@ -38,13 +37,10 @@ import static org.jackhuang.hmcl.ui.FXUtils.runInFX;
 public class TaskExecutorDialogPane extends StackPane {
     private TaskExecutor executor;
     private Consumer<Region> onCancel;
+    private final Consumer<FileDownloadTask.SpeedEvent> speedEventHandler;
 
     @FXML
-    private JFXProgressBar progressBar;
-    @FXML
     private Label lblTitle;
-    @FXML
-    private Label lblSubtitle;
     @FXML
     private Label lblProgress;
     @FXML
@@ -62,10 +58,24 @@ public class TaskExecutorDialogPane extends StackPane {
             onCancel.accept(this);
         });
 
-        lblProgress.textProperty().bind(Bindings.createStringBinding(
-                () -> taskListPane.finishedTasksProperty().get() + "/" + taskListPane.totTasksProperty().get(),
-                taskListPane.finishedTasksProperty(), taskListPane.totTasksProperty()
-        ));
+        speedEventHandler = speedEvent -> {
+            String unit = "B/s";
+            double speed = speedEvent.getSpeed();
+            if (speed > 1024) {
+                speed /= 1024;
+                unit = "KB/s";
+            }
+            if (speed > 1024) {
+                speed /= 1024;
+                unit = "MB/s";
+            }
+            double finalSpeed = speed;
+            String finalUnit = unit;
+            Platform.runLater(() -> {
+                lblProgress.setText(String.format("%.1f %s", finalSpeed, finalUnit));
+            });
+        };
+        FileDownloadTask.speedEvent.channel(FileDownloadTask.SpeedEvent.class).registerWeak(speedEventHandler);
     }
 
     public void setExecutor(TaskExecutor executor) {
@@ -98,25 +108,6 @@ public class TaskExecutorDialogPane extends StackPane {
 
     public void setTitle(String currentState) {
         lblTitle.setText(currentState);
-    }
-
-    public StringProperty subtitleProperty() {
-        return lblSubtitle.textProperty();
-    }
-
-    public String getSubtitle() {
-        return lblSubtitle.getText();
-    }
-
-    public void setSubtitle(String subtitle) {
-        lblSubtitle.setText(subtitle);
-    }
-
-    public void setProgress(double progress) {
-        if (progress == Double.MAX_VALUE)
-            progressBar.setVisible(false);
-        else
-            progressBar.setProgress(progress);
     }
 
     public void setCancel(Consumer<Region> onCancel) {

@@ -1,6 +1,6 @@
 /*
  * Hello Minecraft! Launcher
- * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
+ * Copyright (C) 2020  huangyuhui <huanghongxun2008@126.com> and contributors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -42,7 +42,6 @@ public interface TaskExecutorDialogWizardDisplayer extends AbstractWizardDisplay
         });
 
         pane.setTitle(i18n("message.doing"));
-        pane.setProgress(Double.MAX_VALUE);
         if (settings.containsKey("title")) {
             Object title = settings.get("title");
             if (title instanceof StringProperty)
@@ -51,16 +50,8 @@ public interface TaskExecutorDialogWizardDisplayer extends AbstractWizardDisplay
                 pane.setTitle((String) title);
         }
 
-        if (settings.containsKey("subtitle")) {
-            Object subtitle = settings.get("subtitle");
-            if (subtitle instanceof StringProperty)
-                pane.subtitleProperty().bind((StringProperty) subtitle);
-            else if (subtitle instanceof String)
-                pane.setSubtitle((String) subtitle);
-        }
-
         runInFX(() -> {
-            TaskExecutor executor = task.executor(new TaskListener() {
+            TaskExecutor executor = task.cancellableExecutor(new TaskListener() {
                 @Override
                 public void onStop(boolean success, TaskExecutor executor) {
                     runInFX(() -> {
@@ -74,7 +65,7 @@ public interface TaskExecutorDialogWizardDisplayer extends AbstractWizardDisplay
                                 return;
                             String appendix = StringUtils.getStackTrace(executor.getException());
                             if (settings.get("failure_callback") instanceof WizardProvider.FailureCallback)
-                                ((WizardProvider.FailureCallback)settings.get("failure_callback")).onFail(settings, executor.getException(), () -> onEnd());
+                                ((WizardProvider.FailureCallback) settings.get("failure_callback")).onFail(settings, executor.getException(), () -> onEnd());
                             else if (settings.get("failure_message") instanceof String)
                                 Controllers.dialog(appendix, (String) settings.get("failure_message"), MessageType.ERROR, () -> onEnd());
                             else if (!settings.containsKey("forbid_failure_message"))

@@ -1,6 +1,6 @@
 /*
  * Hello Minecraft! Launcher
- * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
+ * Copyright (C) 2020  huangyuhui <huanghongxun2008@126.com> and contributors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -59,21 +59,19 @@ public abstract class VersionList<T extends RemoteVersion> {
     protected final ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
 
     /**
-     * @param downloadProvider DownloadProvider
      * @return the task to reload the remote version list.
      */
-    public abstract Task<?> refreshAsync(DownloadProvider downloadProvider);
+    public abstract Task<?> refreshAsync();
 
     /**
      * @param gameVersion the remote version depends on
-     * @param downloadProvider DownloadProvider
      * @return the task to reload the remote version list.
      */
-    public Task<?> refreshAsync(String gameVersion, DownloadProvider downloadProvider) {
-        return refreshAsync(downloadProvider);
+    public Task<?> refreshAsync(String gameVersion) {
+        return refreshAsync();
     }
 
-    public Task<?> loadAsync(DownloadProvider downloadProvider) {
+    public Task<?> loadAsync() {
         return Task.composeAsync(() -> {
             lock.readLock().lock();
             boolean loaded;
@@ -83,11 +81,11 @@ public abstract class VersionList<T extends RemoteVersion> {
             } finally {
                 lock.readLock().unlock();
             }
-            return loaded ? null : refreshAsync(downloadProvider);
+            return loaded ? null : refreshAsync();
         });
     }
 
-    public Task<?> loadAsync(String gameVersion, DownloadProvider downloadProvider) {
+    public Task<?> loadAsync(String gameVersion) {
         return Task.composeAsync(() -> {
             lock.readLock().lock();
             boolean loaded;
@@ -97,17 +95,12 @@ public abstract class VersionList<T extends RemoteVersion> {
             } finally {
                 lock.readLock().unlock();
             }
-            return loaded ? null : refreshAsync(gameVersion, downloadProvider);
+            return loaded ? null : refreshAsync(gameVersion);
         });
     }
 
     protected Collection<T> getVersionsImpl(String gameVersion) {
-        lock.readLock().lock();
-        try {
-            return versions.get(gameVersion);
-        } finally {
-            lock.readLock().unlock();
-        }
+        return versions.get(gameVersion);
     }
 
     /**
@@ -117,7 +110,12 @@ public abstract class VersionList<T extends RemoteVersion> {
      * @return the collection of specific remote versions
      */
     public final Collection<T> getVersions(String gameVersion) {
-        return Collections.unmodifiableCollection(getVersionsImpl(gameVersion));
+        lock.readLock().lock();
+        try {
+            return Collections.unmodifiableCollection(new ArrayList<>(getVersionsImpl(gameVersion)));
+        } finally {
+            lock.readLock().unlock();
+        }
     }
 
     /**
@@ -127,7 +125,7 @@ public abstract class VersionList<T extends RemoteVersion> {
      * @param remoteVersion the version of the remote version.
      * @return the specific remote version, null if it is not found.
      */
-    public final Optional<T> getVersion(String gameVersion, String remoteVersion) {
+    public Optional<T> getVersion(String gameVersion, String remoteVersion) {
         lock.readLock().lock();
         try {
             T result = null;

@@ -1,6 +1,6 @@
 /*
  * Hello Minecraft! Launcher
- * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
+ * Copyright (C) 2020  huangyuhui <huanghongxun2008@126.com> and contributors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -84,12 +84,22 @@ public class AccountListItemSkin extends SkinBase<AccountListItem> {
 
         HBox right = new HBox();
         right.setAlignment(Pos.CENTER_RIGHT);
+
         JFXButton btnRefresh = new JFXButton();
         btnRefresh.setOnMouseClicked(e -> skinnable.refresh());
         btnRefresh.getStyleClass().add("toggle-icon4");
         btnRefresh.setGraphic(SVG.refresh(Theme.blackFillBinding(), -1, -1));
         runInFX(() -> FXUtils.installFastTooltip(btnRefresh, i18n("button.refresh")));
         right.getChildren().add(btnRefresh);
+
+        if (skinnable.canUploadSkin()) {
+            JFXButton btnUpload = new JFXButton();
+            btnUpload.setOnMouseClicked(e -> skinnable.uploadSkin());
+            btnUpload.getStyleClass().add("toggle-icon4");
+            btnUpload.setGraphic(SVG.hanger(Theme.blackFillBinding(), -1, -1));
+            runInFX(() -> FXUtils.installFastTooltip(btnUpload, i18n("account.skin.upload")));
+            right.getChildren().add(btnUpload);
+        }
 
         JFXButton btnRemove = new JFXButton();
         btnRemove.setOnMouseClicked(e -> skinnable.remove());
@@ -100,7 +110,8 @@ public class AccountListItemSkin extends SkinBase<AccountListItem> {
         right.getChildren().add(btnRemove);
         root.setRight(right);
 
-        root.setStyle("-fx-background-color: white; -fx-padding: 8 8 8 0;");
+        root.getStyleClass().add("card");
+        root.setStyle("-fx-padding: 8 8 8 0;");
         JFXDepthManager.setDepth(root, 1);
 
         getChildren().setAll(root);

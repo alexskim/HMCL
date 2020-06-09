@@ -1,6 +1,6 @@
 /*
  * Hello Minecraft! Launcher
- * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
+ * Copyright (C) 2020  huangyuhui <huanghongxun2008@126.com> and contributors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -24,8 +24,8 @@ import com.jfoenix.controls.JFXToggleButton;
 import javafx.application.Platform;
 import javafx.beans.InvalidationListener;
 import javafx.beans.binding.Bindings;
-import javafx.beans.property.ReadOnlyStringProperty;
-import javafx.beans.property.ReadOnlyStringWrapper;
+import javafx.beans.property.ReadOnlyObjectProperty;
+import javafx.beans.property.ReadOnlyObjectWrapper;
 import javafx.fxml.FXML;
 import javafx.scene.control.Label;
 import javafx.scene.control.ScrollPane;
@@ -34,6 +34,7 @@ import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 import javafx.stage.FileChooser;
+import org.jackhuang.hmcl.game.GameDirectoryType;
 import org.jackhuang.hmcl.setting.*;
 import org.jackhuang.hmcl.task.Schedulers;
 import org.jackhuang.hmcl.task.Task;
@@ -42,6 +43,7 @@ import org.jackhuang.hmcl.ui.FXUtils;
 import org.jackhuang.hmcl.ui.construct.ComponentList;
 import org.jackhuang.hmcl.ui.construct.ImagePickerItem;
 import org.jackhuang.hmcl.ui.construct.MultiFileItem;
+import org.jackhuang.hmcl.ui.construct.Navigator;
 import org.jackhuang.hmcl.ui.decorator.DecoratorPage;
 import org.jackhuang.hmcl.util.Logging;
 import org.jackhuang.hmcl.util.io.FileUtils;
@@ -62,7 +64,7 @@ import static org.jackhuang.hmcl.ui.FXUtils.stringConverter;
 import static org.jackhuang.hmcl.util.i18n.I18n.i18n;
 
 public final class VersionSettingsPage extends StackPane implements DecoratorPage {
-    private final ReadOnlyStringWrapper title = new ReadOnlyStringWrapper();
+    private final ReadOnlyObjectWrapper<State> state = new ReadOnlyObjectWrapper<>(new State("", null, false, false, false));
 
     private VersionSetting lastVersionSetting = null;
     private Profile profile;
@@ -90,7 +92,7 @@ public final class VersionSettingsPage extends StackPane implements DecoratorPag
     @FXML private JFXToggleButton chkNoGameCheck;
     @FXML private JFXToggleButton chkNoJVMCheck;
     @FXML private MultiFileItem<JavaVersion> javaItem;
-    @FXML private MultiFileItem<EnumGameDirectory> gameDirItem;
+    @FXML private MultiFileItem<GameDirectoryType> gameDirItem;
     @FXML private JFXToggleButton chkShowLogs;
     @FXML private ImagePickerItem iconPickerItem;
     @FXML private JFXCheckBox chkEnableSpecificSettings;
@@ -104,6 +106,7 @@ public final class VersionSettingsPage extends StackPane implements DecoratorPag
 
     public VersionSettingsPage() {
         FXUtils.loadFXML(this, "/assets/fxml/version/version-settings.fxml");
+        addEventHandler(Navigator.NavigationEvent.NAVIGATED, this::onDecoratorPageNavigating);
 
         cboLauncherVisibility.getItems().setAll(LauncherVisibility.values());
         cboLauncherVisibility.setConverter(stringConverter(e -> i18n("settings.advanced.launcher_visibility." + e.name().toLowerCase())));
@@ -129,10 +132,10 @@ public final class VersionSettingsPage extends StackPane implements DecoratorPag
         if (OperatingSystem.CURRENT_OS == OperatingSystem.WINDOWS)
             javaItem.getExtensionFilters().add(new FileChooser.ExtensionFilter("Java", "java.exe", "javaw.exe"));
 
-        gameDirItem.setCustomUserData(EnumGameDirectory.CUSTOM);
+        gameDirItem.setCustomUserData(GameDirectoryType.CUSTOM);
         gameDirItem.loadChildren(Arrays.asList(
-                gameDirItem.createChildren(i18n("settings.advanced.game_dir.default"), EnumGameDirectory.ROOT_FOLDER),
-                gameDirItem.createChildren(i18n("settings.advanced.game_dir.independent"), EnumGameDirectory.VERSION_FOLDER)
+                gameDirItem.createChildren(i18n("settings.advanced.game_dir.default"), GameDirectoryType.ROOT_FOLDER),
+                gameDirItem.createChildren(i18n("settings.advanced.game_dir.independent"), GameDirectoryType.VERSION_FOLDER)
         ));
 
         chkEnableSpecificSettings.selectedProperty().addListener((a, b, newValue) -> {
@@ -161,7 +164,7 @@ public final class VersionSettingsPage extends StackPane implements DecoratorPag
             rootPane.getChildren().remove(iconPickerItemWrapper);
             rootPane.getChildren().remove(settingsTypePane);
             chkEnableSpecificSettings.setSelected(true);
-            title.set(Profiles.getProfileDisplayName(profile) + " - " + i18n("settings.type.global.manage"));
+            state.set(State.fromTitle(Profiles.getProfileDisplayName(profile) + " - " + i18n("settings.type.global.manage")));
         }
 
         VersionSetting versionSetting = profile.getVersionSetting(versionId);
@@ -326,7 +329,7 @@ public final class VersionSettingsPage extends StackPane implements DecoratorPag
     }
 
     @Override
-    public ReadOnlyStringProperty titleProperty() {
-        return title;
+    public ReadOnlyObjectProperty<State> stateProperty() {
+        return state.getReadOnlyProperty();
     }
 }

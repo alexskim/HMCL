@@ -1,6 +1,6 @@
 /*
  * Hello Minecraft! Launcher
- * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
+ * Copyright (C) 2020  huangyuhui <huanghongxun2008@126.com> and contributors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,7 +20,6 @@ package org.jackhuang.hmcl.mod;
 import org.jackhuang.hmcl.util.Lang;
 
 import java.util.List;
-import java.util.regex.Pattern;
 
 /**
  * @author huangyuhui
@@ -45,7 +44,7 @@ public interface ModAdviser {
             "regex:(.*?)\\.log",
             "usernamecache.json", "usercache.json", // Minecraft
             "launcher_profiles.json", "launcher.pack.lzma", // Minecraft Launcher
-            "pack.json", "launcher.jar", "cache", "modpack.cfg", // HMCL
+            "backup", "pack.json", "launcher.jar", "cache", "modpack.cfg", // HMCL
             "manifest.json", "minecraftinstance.json", ".curseclient", // Curse
             ".fabric", ".mixin.out", // Fabric
             "jars", "logs", "versions", "assets", "libraries", "crash-reports", "NVIDIA", "AMD", "screenshots", "natives", "native", "$native", "server-resource-packs", // Minecraft

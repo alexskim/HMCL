@@ -1,6 +1,6 @@
 /*
  * Hello Minecraft! Launcher
- * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
+ * Copyright (C) 2020  huangyuhui <huanghongxun2008@126.com> and contributors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -109,6 +109,12 @@ public final class Config implements Cloneable, Observable {
 
     @SerializedName("proxyPassword")
     private StringProperty proxyPass = new SimpleStringProperty();
+
+    @SerializedName("width")
+    private DoubleProperty width = new SimpleDoubleProperty();
+
+    @SerializedName("height")
+    private DoubleProperty height = new SimpleDoubleProperty();
 
     @SerializedName("theme")
     private ObjectProperty<Theme> theme = new SimpleObjectProperty<>(Theme.BLUE);
@@ -327,6 +333,30 @@ public final class Config implements Cloneable, Observable {
 
     public StringProperty proxyPassProperty() {
         return proxyPass;
+    }
+
+    public double getWidth() {
+        return width.get();
+    }
+
+    public DoubleProperty widthProperty() {
+        return width;
+    }
+
+    public void setWidth(double width) {
+        this.width.set(width);
+    }
+
+    public double getHeight() {
+        return height.get();
+    }
+
+    public DoubleProperty heightProperty() {
+        return height;
+    }
+
+    public void setHeight(double height) {
+        this.height.set(height);
     }
 
     public Theme getTheme() {

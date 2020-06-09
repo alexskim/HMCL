@@ -1,6 +1,6 @@
 /*
  * Hello Minecraft! Launcher
- * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
+ * Copyright (C) 2020  huangyuhui <huanghongxun2008@126.com> and contributors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -47,7 +47,7 @@ import java.util.function.Consumer;
 
 import static org.jackhuang.hmcl.util.i18n.I18n.i18n;
 
-public class MultiFileItem<T> extends ComponentList {
+public class MultiFileItem<T> extends ComponentSublist {
     private final StringProperty customTitle = new SimpleStringProperty(this, "customTitle", i18n("selector.custom"));
     private final StringProperty chooserTitle = new SimpleStringProperty(this, "chooserTitle", i18n("selector.choose_file"));
     private final BooleanProperty directory = new SimpleBooleanProperty(this, "directory", false);
@@ -148,6 +148,7 @@ public class MultiFileItem<T> extends ComponentList {
         pane.setLeft(left);
 
         Label right = new Label(subtitle);
+        right.setWrapText(true);
         right.getStyleClass().add("subtitle-label");
         right.setStyle("-fx-font-size: 10;");
         pane.setRight(right);

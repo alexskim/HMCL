@@ -1,6 +1,6 @@
 /*
  * Hello Minecraft! Launcher
- * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
+ * Copyright (C) 2020  huangyuhui <huanghongxun2008@126.com> and contributors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -22,17 +22,11 @@ import org.jackhuang.hmcl.download.RemoteVersion;
 import org.jackhuang.hmcl.download.VersionList;
 import org.jackhuang.hmcl.task.GetTask;
 import org.jackhuang.hmcl.task.Task;
-import org.jackhuang.hmcl.util.io.NetworkUtils;
 
 import java.io.IOException;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
-
-import static java.nio.charset.StandardCharsets.UTF_8;
 
 /**
  *
@@ -49,9 +43,8 @@ public final class VersionJsonDownloadTask extends Task<String> {
         this.gameVersion = gameVersion;
         this.dependencyManager = dependencyManager;
         this.gameVersionList = dependencyManager.getVersionList("game");
-        
-        if (!gameVersionList.isLoaded())
-            dependents.add(gameVersionList.refreshAsync(dependencyManager.getDownloadProvider()));
+
+        dependents.add(gameVersionList.loadAsync());
 
         setSignificance(TaskSignificance.MODERATE);
     }
@@ -70,9 +63,6 @@ public final class VersionJsonDownloadTask extends Task<String> {
     public void execute() throws IOException {
         RemoteVersion remoteVersion = gameVersionList.getVersion(gameVersion, gameVersion)
                 .orElseThrow(() -> new IOException("Cannot find specific version " + gameVersion + " in remote repository"));
-        dependencies.add(new GetTask(
-                dependencyManager.getDownloadProvider().injectURLs(remoteVersion.getUrl())
-                        .map(NetworkUtils::toURL).collect(Collectors.toList()),
-                UTF_8).storeTo(this::setResult));
+        dependencies.add(new GetTask(dependencyManager.getDownloadProvider().injectURLsWithCandidates(remoteVersion.getUrls())).storeTo(this::setResult));
     }
 }

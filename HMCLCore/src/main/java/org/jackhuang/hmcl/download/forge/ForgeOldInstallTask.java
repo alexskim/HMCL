@@ -1,6 +1,6 @@
 /*
  * Hello Minecraft! Launcher
- * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
+ * Copyright (C) 2020  huangyuhui <huanghongxun2008@126.com> and contributors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,6 +17,7 @@
  */
 package org.jackhuang.hmcl.download.forge;
 
+import org.jackhuang.hmcl.download.ArtifactMalformedException;
 import org.jackhuang.hmcl.download.DefaultDependencyManager;
 import org.jackhuang.hmcl.download.LibraryAnalyzer;
 import org.jackhuang.hmcl.game.Library;
@@ -26,15 +27,12 @@ import org.jackhuang.hmcl.util.gson.JsonUtils;
 import org.jackhuang.hmcl.util.io.FileUtils;
 import org.jackhuang.hmcl.util.io.IOUtils;
 
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
+import java.io.*;
 import java.nio.file.Path;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.zip.ZipEntry;
+import java.util.zip.ZipException;
 import java.util.zip.ZipFile;
 
 public class ForgeOldInstallTask extends Task<Version> {
@@ -69,7 +67,7 @@ public class ForgeOldInstallTask extends Task<Version> {
         try (ZipFile zipFile = new ZipFile(installer.toFile())) {
             InputStream stream = zipFile.getInputStream(zipFile.getEntry("install_profile.json"));
             if (stream == null)
-                throw new IOException("Malformed forge installer file, install_profile.json does not exist.");
+                throw new ArtifactMalformedException("Malformed forge installer file, install_profile.json does not exist.");
             String json = IOUtils.readFullyAsString(stream);
             ForgeInstallProfile installProfile = JsonUtils.fromNonNullJson(json, ForgeInstallProfile.class);
 
@@ -88,7 +86,9 @@ public class ForgeOldInstallTask extends Task<Version> {
                     .setPriority(30000)
                     .setId(LibraryAnalyzer.LibraryType.FORGE.getPatchId())
                     .setVersion(selfVersion));
-            dependencies.add(dependencyManager.checkLibraryCompletionAsync(installProfile.getVersionInfo()));
+            dependencies.add(dependencyManager.checkLibraryCompletionAsync(installProfile.getVersionInfo(), true));
+        } catch (ZipException ex) {
+            throw new ArtifactMalformedException("Malformed forge installer file", ex);
         }
     }
 }

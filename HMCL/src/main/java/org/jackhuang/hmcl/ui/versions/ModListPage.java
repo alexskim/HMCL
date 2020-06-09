@@ -1,6 +1,6 @@
 /*
  * Hello Minecraft! Launcher
- * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
+ * Copyright (C) 2020  huangyuhui <huanghongxun2008@126.com> and contributors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,12 +17,11 @@
  */
 package org.jackhuang.hmcl.ui.versions;
 
-import com.jfoenix.controls.JFXTabPane;
+import javafx.application.Platform;
 import javafx.beans.property.BooleanProperty;
 import javafx.beans.property.SimpleBooleanProperty;
 import javafx.collections.ObservableList;
 import javafx.scene.control.Skin;
-import javafx.scene.control.TreeItem;
 import javafx.stage.FileChooser;
 import org.jackhuang.hmcl.download.LibraryAnalyzer;
 import org.jackhuang.hmcl.mod.ModInfo;
@@ -33,15 +32,18 @@ import org.jackhuang.hmcl.task.Task;
 import org.jackhuang.hmcl.ui.Controllers;
 import org.jackhuang.hmcl.ui.FXUtils;
 import org.jackhuang.hmcl.ui.ListPageBase;
+import org.jackhuang.hmcl.ui.construct.TabHeader;
 import org.jackhuang.hmcl.util.Logging;
 import org.jackhuang.hmcl.util.io.FileUtils;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Objects;
+import java.util.concurrent.CompletableFuture;
 import java.util.logging.Level;
 import java.util.stream.Collectors;
 
@@ -51,11 +53,12 @@ import static org.jackhuang.hmcl.util.i18n.I18n.i18n;
 public final class ModListPage extends ListPageBase<ModListPageSkin.ModInfoObject> {
     private final BooleanProperty modded = new SimpleBooleanProperty(this, "modded", false);
 
-    private JFXTabPane parentTab;
+    private TabHeader.Tab tab;
     private ModManager modManager;
     private LibraryAnalyzer libraryAnalyzer;
 
-    public ModListPage() {
+    public ModListPage(TabHeader.Tab tab) {
+        this.tab = tab;
 
         FXUtils.applyDragListener(this, it -> Arrays.asList("jar", "zip", "litemod").contains(FileUtils.getExtension(it)), mods -> {
             mods.forEach(it -> {
@@ -78,28 +81,34 @@ public final class ModListPage extends ListPageBase<ModListPageSkin.ModInfoObjec
         loadMods(modManager);
     }
 
-    public void loadVersion(Profile profile, String id) {
+    public CompletableFuture<?> loadVersion(Profile profile, String id) {
         libraryAnalyzer = LibraryAnalyzer.analyze(profile.getRepository().getResolvedPreservingPatchesVersion(id));
         modded.set(libraryAnalyzer.hasModLoader());
-        loadMods(profile.getRepository().getModManager(id));
+        return loadMods(profile.getRepository().getModManager(id));
     }
 
-    private void loadMods(ModManager modManager) {
+    private CompletableFuture<?> loadMods(ModManager modManager) {
         this.modManager = modManager;
-        Task.supplyAsync(() -> {
-            synchronized (ModListPage.this) {
-                runInFX(() -> loadingProperty().set(true));
-                modManager.refreshMods();
-                return new LinkedList<>(modManager.getMods());
+        return CompletableFuture.supplyAsync(() -> {
+            try {
+                synchronized (ModListPage.this) {
+                    runInFX(() -> loadingProperty().set(true));
+                    modManager.refreshMods();
+                    return new LinkedList<>(modManager.getMods());
+                }
+            } catch (IOException e) {
+                throw new UncheckedIOException(e);
             }
-        }).whenComplete(Schedulers.javafx(), (list, exception) -> {
+        }).whenCompleteAsync((list, exception) -> {
             loadingProperty().set(false);
             if (exception == null)
-                FXUtils.onWeakChangeAndOperate(parentTab.getSelectionModel().selectedItemProperty(), newValue -> {
-                    if (newValue != null && newValue.getUserData() == ModListPage.this)
-                        itemsProperty().setAll(list.stream().map(ModListPageSkin.ModInfoObject::new).collect(Collectors.toList()));
-                });
-        }).start();
+                getProperties().put(ModListPage.class, FXUtils.onWeakChangeAndOperate(tab.selectedProperty(), newValue -> {
+                    if (newValue)
+                        itemsProperty().setAll(list.stream().map(ModListPageSkin.ModInfoObject::new).sorted().collect(Collectors.toList()));
+                }));
+            else
+                getProperties().remove(ModListPage.class);
+        }, Platform::runLater);
     }
 
     public void add() {
@@ -135,15 +144,9 @@ public final class ModListPage extends ListPageBase<ModListPageSkin.ModInfoObjec
         }).start();
     }
 
-    public void setParentTab(JFXTabPane parentTab) {
-        this.parentTab = parentTab;
-    }
-
-    public void removeSelected(ObservableList<TreeItem<ModListPageSkin.ModInfoObject>> selectedItems) {
+    public void removeSelected(ObservableList<ModListPageSkin.ModInfoObject> selectedItems) {
         try {
             modManager.removeMods(selectedItems.stream()
-                    .filter(Objects::nonNull)
-                    .map(TreeItem::getValue)
                     .filter(Objects::nonNull)
                     .map(ModListPageSkin.ModInfoObject::getModInfo)
                     .toArray(ModInfo[]::new));
@@ -153,16 +156,16 @@ public final class ModListPage extends ListPageBase<ModListPageSkin.ModInfoObjec
         }
     }
 
-    public void enableSelected(ObservableList<TreeItem<ModListPageSkin.ModInfoObject>> selectedItems) {
+    public void enableSelected(ObservableList<ModListPageSkin.ModInfoObject> selectedItems) {
         selectedItems.stream()
-                .map(TreeItem::getValue)
+                .filter(Objects::nonNull)
                 .map(ModListPageSkin.ModInfoObject::getModInfo)
                 .forEach(info -> info.setActive(true));
     }
 
-    public void disableSelected(ObservableList<TreeItem<ModListPageSkin.ModInfoObject>> selectedItems) {
+    public void disableSelected(ObservableList<ModListPageSkin.ModInfoObject> selectedItems) {
         selectedItems.stream()
-                .map(TreeItem::getValue)
+                .filter(Objects::nonNull)
                 .map(ModListPageSkin.ModInfoObject::getModInfo)
                 .forEach(info -> info.setActive(false));
     }

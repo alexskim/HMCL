@@ -1,6 +1,6 @@
 /*
  * Hello Minecraft! Launcher
- * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
+ * Copyright (C) 2020  huangyuhui <huanghongxun2008@126.com> and contributors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -67,6 +67,10 @@ public class GameListItem extends Control {
 
     public void rename() {
         Versions.renameVersion(profile, version);
+    }
+
+    public void duplicate() {
+        Versions.duplicateVersion(profile, version);
     }
 
     public void remove() {

@@ -1,6 +1,6 @@
 /*
  * Hello Minecraft! Launcher
- * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
+ * Copyright (C) 2020  huangyuhui <huanghongxun2008@126.com> and contributors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -23,12 +23,18 @@ import org.jackhuang.hmcl.download.game.GameDownloadTask;
 import org.jackhuang.hmcl.download.game.GameLibrariesTask;
 import org.jackhuang.hmcl.download.optifine.OptiFineInstallTask;
 import org.jackhuang.hmcl.game.DefaultGameRepository;
+import org.jackhuang.hmcl.game.GameVersion;
+import org.jackhuang.hmcl.game.Library;
 import org.jackhuang.hmcl.game.Version;
 import org.jackhuang.hmcl.task.Task;
-import org.jackhuang.hmcl.util.function.ExceptionalFunction;
 
 import java.io.IOException;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
+
+import static org.jackhuang.hmcl.download.LibraryAnalyzer.LibraryType.OPTIFINE;
 
 /**
  * Note: This class has no state.
@@ -68,7 +74,7 @@ public class DefaultDependencyManager extends AbstractDependencyManager {
     }
 
     @Override
-    public Task<?> checkGameCompletionAsync(Version original) {
+    public Task<?> checkGameCompletionAsync(Version original, boolean integrityCheck) {
         Version version = original.resolve(repository);
         return Task.allOf(
                 Task.composeAsync(() -> {
@@ -77,14 +83,36 @@ public class DefaultDependencyManager extends AbstractDependencyManager {
                     else
                         return null;
                 }),
-                new GameAssetDownloadTask(this, version, GameAssetDownloadTask.DOWNLOAD_INDEX_IF_NECESSARY),
-                new GameLibrariesTask(this, version)
+                new GameAssetDownloadTask(this, version, GameAssetDownloadTask.DOWNLOAD_INDEX_IF_NECESSARY, integrityCheck),
+                new GameLibrariesTask(this, version, integrityCheck)
         );
     }
 
     @Override
-    public Task<?> checkLibraryCompletionAsync(Version version) {
-        return new GameLibrariesTask(this, version, version.getLibraries());
+    public Task<?> checkLibraryCompletionAsync(Version version, boolean integrityCheck) {
+        return new GameLibrariesTask(this, version, integrityCheck, version.getLibraries());
+    }
+
+    @Override
+    public Task<?> checkPatchCompletionAsync(Version version, boolean integrityCheck) {
+        return Task.composeAsync(() -> {
+            List<Task<?>> tasks = new ArrayList<>();
+
+            Optional<String> gameVersion = GameVersion.minecraftVersion(repository.getVersionJar(version));
+            if (!gameVersion.isPresent()) return null;
+
+            LibraryAnalyzer analyzer = LibraryAnalyzer.analyze(version.resolvePreservingPatches(getGameRepository()));
+            version.resolve(getGameRepository()).getLibraries().stream().filter(Library::appliesToCurrentEnvironment).forEach(library -> {
+                Optional<String> libraryVersion = analyzer.getVersion(OPTIFINE);
+                if (OPTIFINE.matchLibrary(library) && libraryVersion.isPresent()) {
+                    if (GameLibrariesTask.shouldDownloadLibrary(repository, version, library, integrityCheck)) {
+                        tasks.add(installLibraryAsync(gameVersion.get(), version, OPTIFINE.getPatchId(), libraryVersion.get()));
+                    }
+                }
+            });
+
+            return Task.allOf(tasks);
+        });
     }
 
     @Override
@@ -92,9 +120,10 @@ public class DefaultDependencyManager extends AbstractDependencyManager {
         if (baseVersion.isResolved()) throw new IllegalArgumentException("Version should not be resolved");
 
         VersionList<?> versionList = getVersionList(libraryId);
-        return versionList.loadAsync(gameVersion, getDownloadProvider())
+        return versionList.loadAsync(gameVersion)
                 .thenComposeAsync(() -> installLibraryAsync(baseVersion, versionList.getVersion(gameVersion, libraryVersion)
-                        .orElseThrow(() -> new IOException("Remote library " + libraryId + " has no version " + libraryVersion))));
+                        .orElseThrow(() -> new IOException("Remote library " + libraryId + " has no version " + libraryVersion))))
+                .withStage(String.format("hmcl.install.%s:%s", libraryId, libraryVersion));
     }
 
     @Override
@@ -104,11 +133,7 @@ public class DefaultDependencyManager extends AbstractDependencyManager {
         return removeLibraryAsync(baseVersion.resolvePreservingPatches(repository), libraryVersion.getLibraryId())
                 .thenComposeAsync(version -> libraryVersion.getInstallTask(this, version))
                 .thenApplyAsync(baseVersion::addPatch)
-                .thenComposeAsync(repository::save);
-    }
-
-    public ExceptionalFunction<Version, Task<Version>, ?> installLibraryAsync(RemoteVersion libraryVersion) {
-        return version -> installLibraryAsync(version, libraryVersion);
+                .withStage(String.format("hmcl.install.%s:%s", libraryVersion.getLibraryId(), libraryVersion.getSelfVersion()));
     }
 
     public Task<Version> installLibraryAsync(Version oldVersion, Path installer) {
@@ -128,8 +153,7 @@ public class DefaultDependencyManager extends AbstractDependencyManager {
 
                     throw new UnsupportedLibraryInstallerException();
                 })
-                .thenApplyAsync(oldVersion::addPatch)
-                .thenComposeAsync(repository::save);
+                .thenApplyAsync(oldVersion::addPatch);
     }
 
     public static class UnsupportedLibraryInstallerException extends Exception {

@@ -1,6 +1,6 @@
 /*
  * Hello Minecraft! Launcher
- * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
+ * Copyright (C) 2020  huangyuhui <huanghongxun2008@126.com> and contributors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -15,7 +15,7 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-package org.jackhuang.hmcl.ui;
+package org.jackhuang.hmcl.ui.main;
 
 import com.jfoenix.controls.JFXColorPicker;
 import com.jfoenix.effects.JFXDepthManager;
@@ -24,13 +24,15 @@ import javafx.beans.InvalidationListener;
 import javafx.beans.WeakInvalidationListener;
 import javafx.beans.binding.Bindings;
 import javafx.beans.binding.When;
-import javafx.beans.property.ReadOnlyStringProperty;
-import javafx.beans.property.ReadOnlyStringWrapper;
+import javafx.beans.property.ReadOnlyObjectProperty;
+import javafx.beans.property.ReadOnlyObjectWrapper;
 import javafx.scene.control.ToggleGroup;
 import javafx.scene.paint.Color;
 import javafx.scene.text.Font;
 import org.jackhuang.hmcl.Metadata;
 import org.jackhuang.hmcl.setting.*;
+import org.jackhuang.hmcl.ui.Controllers;
+import org.jackhuang.hmcl.ui.FXUtils;
 import org.jackhuang.hmcl.ui.construct.MessageDialogPane.MessageType;
 import org.jackhuang.hmcl.ui.construct.Validator;
 import org.jackhuang.hmcl.ui.decorator.DecoratorPage;
@@ -40,9 +42,11 @@ import org.jackhuang.hmcl.upgrade.UpdateChecker;
 import org.jackhuang.hmcl.upgrade.UpdateHandler;
 import org.jackhuang.hmcl.util.Logging;
 import org.jackhuang.hmcl.util.i18n.Locales;
+import org.jackhuang.hmcl.util.io.FileUtils;
 import org.jackhuang.hmcl.util.javafx.SafeStringConverter;
 
 import java.awt.*;
+import java.io.File;
 import java.io.IOException;
 import java.net.Proxy;
 import java.nio.file.Files;
@@ -58,11 +62,11 @@ import static org.jackhuang.hmcl.setting.ConfigHolder.config;
 import static org.jackhuang.hmcl.util.Lang.thread;
 import static org.jackhuang.hmcl.util.Logging.LOG;
 import static org.jackhuang.hmcl.util.i18n.I18n.i18n;
-import static org.jackhuang.hmcl.util.javafx.ExtendedProperties.reservedSelectedPropertyFor;
+import static org.jackhuang.hmcl.util.javafx.ExtendedProperties.reversedSelectedPropertyFor;
 import static org.jackhuang.hmcl.util.javafx.ExtendedProperties.selectedItemPropertyFor;
 
 public final class SettingsPage extends SettingsView implements DecoratorPage {
-    private final ReadOnlyStringWrapper title = new ReadOnlyStringWrapper(this, "title", i18n("settings.launcher"));
+    private final ReadOnlyObjectWrapper<State> state = new ReadOnlyObjectWrapper<>(State.fromTitle(i18n("settings.launcher")));
 
     private InvalidationListener updateListener;
 
@@ -106,7 +110,7 @@ public final class SettingsPage extends SettingsView implements DecoratorPage {
         proxyPane.disableProperty().bind(chkDisableProxy.selectedProperty());
         authPane.disableProperty().bind(chkProxyAuthentication.selectedProperty().not());
 
-        reservedSelectedPropertyFor(chkDisableProxy).bindBidirectional(config().hasProxyProperty());
+        reversedSelectedPropertyFor(chkDisableProxy).bindBidirectional(config().hasProxyProperty());
         chkProxyAuthentication.selectedProperty().bindBidirectional(config().hasProxyAuthProperty());
 
         ToggleGroup proxyConfigurationGroup = new ToggleGroup();
@@ -194,17 +198,9 @@ public final class SettingsPage extends SettingsView implements DecoratorPage {
         // ====
     }
 
-    public String getTitle() {
-        return title.get();
-    }
-
     @Override
-    public ReadOnlyStringProperty titleProperty() {
-        return title.getReadOnlyProperty();
-    }
-
-    public void setTitle(String title) {
-        this.title.set(title);
+    public ReadOnlyObjectProperty<State> stateProperty() {
+        return state.getReadOnlyProperty();
     }
 
     @Override
@@ -250,5 +246,10 @@ public final class SettingsPage extends SettingsView implements DecoratorPage {
     @Override
     protected void onSponsor() {
         FXUtils.openLink("https://hmcl.huangyuhui.net/api/redirect/sponsor");
+    }
+
+    @Override
+    protected void clearCacheDirectory() {
+        FileUtils.cleanDirectoryQuietly(new File(Settings.instance().getCommonDirectory(), "cache"));
     }
 }

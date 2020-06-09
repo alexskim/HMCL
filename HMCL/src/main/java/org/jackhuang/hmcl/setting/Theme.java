@@ -1,6 +1,6 @@
 /*
  * Hello Minecraft! Launcher
- * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
+ * Copyright (C) 2020  huangyuhui <huanghongxun2008@126.com> and contributors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -23,7 +23,6 @@ import com.google.gson.stream.JsonWriter;
 import javafx.beans.binding.Bindings;
 import javafx.beans.binding.ObjectBinding;
 import javafx.scene.paint.Color;
-
 import org.jackhuang.hmcl.util.Logging;
 import org.jackhuang.hmcl.util.ResourceNotFoundError;
 import org.jackhuang.hmcl.util.io.FileUtils;
@@ -40,7 +39,7 @@ import static org.jackhuang.hmcl.setting.ConfigHolder.config;
 @JsonAdapter(Theme.TypeAdapter.class)
 public class Theme {
     public static final Theme BLUE = new Theme("blue", "#5C6BC0");
-
+    public static final Color BLACK = Color.web("#292929");
     public static final Color[] SUGGESTED_COLORS = new Color[]{
             Color.web("#5C6BC0"), // blue
             Color.web("#283593"), // dark blue
@@ -50,12 +49,14 @@ public class Theme {
             Color.web("#B71C1C")  // red
     };
 
+    private final Color paint;
     private final String color;
     private final String name;
 
     Theme(String name, String color) {
         this.name = name;
         this.color = color;
+        this.paint = Color.web(color);
     }
 
     public String getName() {
@@ -79,11 +80,15 @@ public class Theme {
     }
 
     public String[] getStylesheets() {
+        Color textFill = getForegroundColor();
+
         String css;
         try {
             File temp = File.createTempFile("hmcl", ".css");
             FileUtils.writeText(temp, IOUtils.readFullyAsString(ResourceNotFoundError.getResourceAsStream("/assets/css/custom.css"))
                     .replace("%base-color%", color)
+                    .replace("%base-rippler-color%", String.format("rgba(%d, %d, %d, 0.3)", (int)Math.ceil(paint.getRed() * 256), (int)Math.ceil(paint.getGreen() * 256), (int)Math.ceil(paint.getBlue() * 256)))
+                    .replace("%disabled-font-color%", String.format("rgba(%d, %d, %d, 0.7)", (int)Math.ceil(textFill.getRed() * 256), (int)Math.ceil(textFill.getGreen() * 256), (int)Math.ceil(textFill.getBlue() * 256)))
                     .replace("%font-color%", getColorDisplayName(getForegroundColor())));
             css = temp.toURI().toString();
         } catch (IOException | NullPointerException e) {
@@ -139,7 +144,7 @@ public class Theme {
     }
 
     public static ObjectBinding<Color> blackFillBinding() {
-        return Bindings.createObjectBinding(() -> Color.BLACK);
+        return Bindings.createObjectBinding(() -> BLACK);
     }
 
     public static ObjectBinding<Color> whiteFillBinding() {

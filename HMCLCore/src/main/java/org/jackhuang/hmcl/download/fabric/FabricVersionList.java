@@ -1,6 +1,6 @@
 /*
  * Hello Minecraft! Launcher
- * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
+ * Copyright (C) 2020  huangyuhui <huanghongxun2008@126.com> and contributors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -23,22 +23,19 @@ import org.jackhuang.hmcl.download.VersionList;
 import org.jackhuang.hmcl.task.Task;
 import org.jackhuang.hmcl.util.gson.JsonUtils;
 import org.jackhuang.hmcl.util.io.NetworkUtils;
+import org.jetbrains.annotations.Nullable;
 
-import javax.xml.stream.XMLInputFactory;
-import javax.xml.stream.XMLStreamException;
-import javax.xml.stream.XMLStreamReader;
 import java.io.IOException;
-import java.net.URL;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 
 public final class FabricVersionList extends VersionList<FabricRemoteVersion> {
+    private final DownloadProvider downloadProvider;
 
-    public static final FabricVersionList INSTANCE = new FabricVersionList();
-
-    private FabricVersionList() {
+    public FabricVersionList(DownloadProvider downloadProvider) {
+        this.downloadProvider = downloadProvider;
     }
 
     @Override
@@ -47,19 +44,20 @@ public final class FabricVersionList extends VersionList<FabricRemoteVersion> {
     }
 
     @Override
-    public Task<?> refreshAsync(DownloadProvider downloadProvider) {
+    public Task<?> refreshAsync() {
         return new Task<Void>() {
             @Override
-            public void execute() throws IOException, XMLStreamException {
-                List<String> gameVersions = getGameVersions(META_URL);
-                List<String> loaderVersions = getVersions(FABRIC_MAVEN_URL, FABRIC_PACKAGE_NAME, FABRIC_JAR_NAME);
+            public void execute() throws IOException {
+                List<String> gameVersions = getGameVersions(GAME_META_URL);
+                List<String> loaderVersions = getGameVersions(LOADER_META_URL);
 
                 lock.writeLock().lock();
 
                 try {
                     for (String gameVersion : gameVersions)
                         for (String loaderVersion : loaderVersions)
-                            versions.put(gameVersion, new FabricRemoteVersion(gameVersion, loaderVersion, ""));
+                            versions.put(gameVersion, new FabricRemoteVersion(gameVersion, loaderVersion,
+                                    Collections.singletonList(getLaunchMetaUrl(gameVersion, loaderVersion))));
                 } finally {
                     lock.writeLock().unlock();
                 }
@@ -67,49 +65,41 @@ public final class FabricVersionList extends VersionList<FabricRemoteVersion> {
         };
     }
 
-    private static final String META_URL = "https://meta.fabricmc.net/v2/versions/game";
-    private static final String FABRIC_MAVEN_URL = "https://maven.fabricmc.net/";
-    private static final String FABRIC_PACKAGE_NAME = "net/fabricmc";
-    private static final String FABRIC_JAR_NAME = "fabric-loader";
-
-    private List<String> getVersions(String mavenServerURL, String packageName, String jarName) throws IOException, XMLStreamException {
-        List<String> versions = new ArrayList<>();
-        URL url = new URL(mavenServerURL + packageName + "/" + jarName + "/maven-metadata.xml");
-        XMLStreamReader reader = XMLInputFactory.newInstance().createXMLStreamReader(url.openStream());
-
-        while(reader.hasNext()) {
-            if (reader.next() == 1 && reader.getLocalName().equals("version")) {
-                String text = reader.getElementText();
-                versions.add(text);
-            }
-        }
-
-        reader.close();
-        Collections.reverse(versions);
-        return versions;
-    }
+    private static final String LOADER_META_URL = "https://meta.fabricmc.net/v2/versions/loader";
+    private static final String GAME_META_URL = "https://meta.fabricmc.net/v2/versions/game";
 
     private List<String> getGameVersions(String metaUrl) throws IOException {
-        String json = NetworkUtils.doGet(NetworkUtils.toURL(metaUrl));
+        String json = NetworkUtils.doGet(NetworkUtils.toURL(downloadProvider.injectURL(metaUrl)));
         return JsonUtils.GSON.<ArrayList<GameVersion>>fromJson(json, new TypeToken<ArrayList<GameVersion>>() {
         }.getType()).stream().map(GameVersion::getVersion).collect(Collectors.toList());
     }
 
+    private static String getLaunchMetaUrl(String gameVersion, String loaderVersion) {
+        return String.format("https://meta.fabricmc.net/v2/versions/loader/%s/%s", gameVersion, loaderVersion);
+    }
+
     private static class GameVersion {
         private final String version;
+        private final String maven;
         private final boolean stable;
 
         public GameVersion() {
-            this("", false);
+            this("", null, false);
         }
 
-        public GameVersion(String version, boolean stable) {
+        public GameVersion(String version, String maven, boolean stable) {
             this.version = version;
+            this.maven = maven;
             this.stable = stable;
         }
 
         public String getVersion() {
             return version;
+        }
+
+        @Nullable
+        public String getMaven() {
+            return maven;
         }
 
         public boolean isStable() {

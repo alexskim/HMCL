@@ -1,6 +1,6 @@
 /*
  * Hello Minecraft! Launcher
- * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
+ * Copyright (C) 2020  huangyuhui <huanghongxun2008@126.com> and contributors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,6 +17,8 @@
  */
 package org.jackhuang.hmcl.ui.versions;
 
+import javafx.application.Platform;
+import javafx.beans.binding.Bindings;
 import javafx.scene.Node;
 import javafx.scene.control.Skin;
 import javafx.stage.FileChooser;
@@ -28,24 +30,20 @@ import org.jackhuang.hmcl.task.Schedulers;
 import org.jackhuang.hmcl.task.Task;
 import org.jackhuang.hmcl.task.TaskExecutor;
 import org.jackhuang.hmcl.task.TaskListener;
-import org.jackhuang.hmcl.ui.Controllers;
-import org.jackhuang.hmcl.ui.FXUtils;
-import org.jackhuang.hmcl.ui.InstallerItem;
-import org.jackhuang.hmcl.ui.ListPageBase;
-import org.jackhuang.hmcl.ui.SVG;
-import org.jackhuang.hmcl.ui.ToolbarListPageSkin;
-import org.jackhuang.hmcl.ui.download.InstallerWizardProvider;
+import org.jackhuang.hmcl.ui.*;
 import org.jackhuang.hmcl.ui.download.UpdateInstallerWizardProvider;
 import org.jackhuang.hmcl.util.Lang;
-import org.jackhuang.hmcl.util.i18n.I18n;
 import org.jackhuang.hmcl.util.io.FileUtils;
 
 import java.io.File;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
+import static org.jackhuang.hmcl.download.LibraryAnalyzer.LibraryType.*;
 import static org.jackhuang.hmcl.ui.FXUtils.runInFX;
 import static org.jackhuang.hmcl.util.i18n.I18n.i18n;
 
@@ -67,47 +65,76 @@ public class InstallerListPage extends ListPageBase<InstallerItem> {
         return new InstallerListPageSkin();
     }
 
-    public void loadVersion(Profile profile, String versionId) {
+    public CompletableFuture<?> loadVersion(Profile profile, String versionId) {
         this.profile = profile;
         this.versionId = versionId;
         this.version = profile.getRepository().getVersion(versionId);
         this.gameVersion = null;
 
-        Task.supplyAsync(() -> {
+        return CompletableFuture.supplyAsync(() -> {
             gameVersion = GameVersion.minecraftVersion(profile.getRepository().getVersionJar(version)).orElse(null);
 
             return LibraryAnalyzer.analyze(profile.getRepository().getResolvedPreservingPatchesVersion(versionId));
-        }).thenAcceptAsync(Schedulers.javafx(), analyzer -> {
-            Function<String, Consumer<InstallerItem>> removeAction = libraryId -> x -> {
+        }).thenAcceptAsync(analyzer -> {
+            Function<String, Runnable> removeAction = libraryId -> () -> {
                 profile.getDependency().removeLibraryAsync(version, libraryId)
-                        .thenComposeAsync(profile.getRepository()::save)
+                        .thenComposeAsync(profile.getRepository()::saveAsync)
                         .withComposeAsync(profile.getRepository().refreshVersionsAsync())
                         .withRunAsync(Schedulers.javafx(), () -> loadVersion(this.profile, this.versionId))
                         .start();
             };
 
             itemsProperty().clear();
+
+            InstallerItem.InstallerItemGroup group = new InstallerItem.InstallerItemGroup();
+
+            // Conventional libraries: game, fabric, forge, liteloader, optifine
+            for (InstallerItem installerItem : group.getLibraries()) {
+                String libraryId = installerItem.getLibraryId();
+                String libraryVersion = analyzer.getVersion(libraryId).orElse(null);
+                installerItem.libraryVersion.set(libraryVersion);
+                installerItem.upgradable.set(libraryVersion != null);
+                installerItem.installable.set(true);
+                installerItem.action.set(e -> {
+                    Controllers.getDecorator().startWizard(new UpdateInstallerWizardProvider(profile, gameVersion, version, libraryId, libraryVersion));
+                });
+                boolean removable = !"game".equals(libraryId) && libraryVersion != null;
+                installerItem.removable.set(removable);
+                if (removable) {
+                    Runnable action = removeAction.apply(libraryId);
+                    installerItem.removeAction.set(e -> action.run());
+                }
+                itemsProperty().add(installerItem);
+            }
+
+            // other third-party libraries which are unable to manage.
             for (LibraryAnalyzer.LibraryMark mark : analyzer) {
                 String libraryId = mark.getLibraryId();
                 String libraryVersion = mark.getLibraryVersion();
-                String title = I18n.hasKey("install.installer." + libraryId) ? i18n("install.installer." + libraryId) : libraryId;
-                Consumer<InstallerItem> action = "game".equals(libraryId) ? null : removeAction.apply(libraryId);
-                if (libraryVersion != null && Lang.test(() -> profile.getDependency().getVersionList(libraryId)))
-                    itemsProperty().add(
-                            new InstallerItem(title, libraryVersion, () -> {
-                                Controllers.getDecorator().startWizard(new UpdateInstallerWizardProvider(profile, gameVersion, version, libraryId, libraryVersion));
-                            }, action));
-                else
-                    itemsProperty().add(new InstallerItem(title, libraryVersion, null, action));
-            }
-        }).start();
-    }
 
-    public void installOnline() {
-        if (gameVersion == null)
-            Controllers.dialog(i18n("version.cannot_read"));
-        else
-            Controllers.getDecorator().startWizard(new InstallerWizardProvider(profile, gameVersion, version));
+                // we have done this library above.
+                if (LibraryAnalyzer.LibraryType.fromPatchId(libraryId) != null)
+                    continue;
+
+                Runnable action = removeAction.apply(libraryId);
+
+                InstallerItem installerItem = new InstallerItem(libraryId);
+                installerItem.libraryVersion.set(libraryVersion);
+                installerItem.installable.set(false);
+                installerItem.upgradable.bind(installerItem.installable);
+                installerItem.removable.set(true);
+                installerItem.removeAction.set(e -> action.run());
+
+                if (libraryVersion != null && Lang.test(() -> profile.getDependency().getVersionList(libraryId))) {
+                    installerItem.installable.set(true);
+                    installerItem.action.set(e -> {
+                        Controllers.getDecorator().startWizard(new UpdateInstallerWizardProvider(profile, gameVersion, version, libraryId, libraryVersion));
+                    });
+                }
+
+                itemsProperty().add(installerItem);
+            }
+        }, Platform::runLater);
     }
 
     public void installOffline() {
@@ -119,6 +146,7 @@ public class InstallerListPage extends ListPageBase<InstallerItem> {
 
     private void doInstallOffline(File file) {
         Task<?> task = profile.getDependency().installLibraryAsync(version, file.toPath())
+                .thenComposeAsync(profile.getRepository()::saveAsync)
                 .thenComposeAsync(profile.getRepository().refreshVersionsAsync());
         task.setName(i18n("install.installer.install_offline"));
         TaskExecutor executor = task.executor(new TaskListener() {
@@ -131,7 +159,7 @@ public class InstallerListPage extends ListPageBase<InstallerItem> {
                     } else {
                         if (executor.getException() == null)
                             return;
-                        InstallerWizardProvider.alertFailureMessage(executor.getException(), null);
+                        UpdateInstallerWizardProvider.alertFailureMessage(executor.getException(), null);
                     }
                 });
             }
@@ -148,8 +176,7 @@ public class InstallerListPage extends ListPageBase<InstallerItem> {
 
         @Override
         protected List<Node> initializeToolbar(InstallerListPage skinnable) {
-            return Arrays.asList(
-                    createToolbarButton(i18n("install.installer.install_online"), SVG::plus, skinnable::installOnline),
+            return Collections.singletonList(
                     createToolbarButton(i18n("install.installer.install_offline"), SVG::plus, skinnable::installOffline));
         }
     }

@@ -1,6 +1,6 @@
 /*
  * Hello Minecraft! Launcher
- * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
+ * Copyright (C) 2020  huangyuhui <huanghongxun2008@126.com> and contributors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -18,6 +18,7 @@
 package org.jackhuang.hmcl.ui.download;
 
 import com.jfoenix.controls.JFXButton;
+import com.jfoenix.effects.JFXDepthManager;
 import javafx.application.Platform;
 import javafx.fxml.FXML;
 import javafx.scene.layout.StackPane;
@@ -41,7 +42,7 @@ import java.nio.file.Path;
 import java.util.Map;
 import java.util.Optional;
 
-import static org.jackhuang.hmcl.ui.download.LocalModpackPage.*;
+import static org.jackhuang.hmcl.ui.download.LocalModpackPage.MODPACK_FILE;
 import static org.jackhuang.hmcl.ui.download.RemoteModpackPage.MODPACK_SERVER_MANIFEST;
 import static org.jackhuang.hmcl.util.Lang.tryCast;
 import static org.jackhuang.hmcl.util.i18n.I18n.i18n;
@@ -55,6 +56,9 @@ public final class ModpackSelectionPage extends StackPane implements WizardPage 
     public ModpackSelectionPage(WizardController controller) {
         this.controller = controller;
         FXUtils.loadFXML(this, "/assets/fxml/download/modpack-source.fxml");
+
+        JFXDepthManager.setDepth(btnLocal, 1);
+        JFXDepthManager.setDepth(btnRemote, 1);
 
         Optional<File> filePath = tryCast(controller.getSettings().get(MODPACK_FILE), File.class);
         if (filePath.isPresent()) {
@@ -86,7 +90,7 @@ public final class ModpackSelectionPage extends StackPane implements WizardPage 
 
     @FXML
     private void onChooseRemoteFile() {
-        Controllers.inputDialog(i18n("modpack.choose.remote.tooltip"), (urlString, resolve, reject) -> {
+        Controllers.prompt(i18n("modpack.choose.remote.tooltip"), (urlString, resolve, reject) -> {
             try {
                 URL url = new URL(urlString);
                 if (urlString.endsWith("server-manifest.json")) {

@@ -1,6 +1,6 @@
 /*
  * Hello Minecraft! Launcher
- * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
+ * Copyright (C) 2020  huangyuhui <huanghongxun2008@126.com> and contributors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -26,17 +26,19 @@ import org.jackhuang.hmcl.util.gson.JsonUtils;
 import org.jackhuang.hmcl.util.io.NetworkUtils;
 import org.jackhuang.hmcl.util.versioning.VersionNumber;
 
-import java.util.*;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.Map;
 
 /**
  *
  * @author huangyuhui
  */
 public final class ForgeVersionList extends VersionList<ForgeRemoteVersion> {
+    private final DownloadProvider downloadProvider;
 
-    public static final ForgeVersionList INSTANCE = new ForgeVersionList();
-
-    private ForgeVersionList() {
+    public ForgeVersionList(DownloadProvider downloadProvider) {
+        this.downloadProvider = downloadProvider;
     }
 
     @Override
@@ -45,7 +47,7 @@ public final class ForgeVersionList extends VersionList<ForgeRemoteVersion> {
     }
 
     @Override
-    public Task<?> refreshAsync(DownloadProvider downloadProvider) {
+    public Task<?> refreshAsync() {
         final GetTask task = new GetTask(NetworkUtils.toURL(downloadProvider.injectURL(FORGE_LIST)));
         return new Task<Void>() {
 
@@ -76,13 +78,13 @@ public final class ForgeVersionList extends VersionList<ForgeRemoteVersion> {
                                     String classifier = version.getGameVersion() + "-" + version.getVersion()
                                             + (StringUtils.isNotBlank(version.getBranch()) ? "-" + version.getBranch() : "");
                                     String fileName = root.getArtifact() + "-" + classifier + "-" + file[1] + "." + file[0];
-                                    jar = downloadProvider.injectURL(root.getWebPath() + classifier + "/" + fileName);
+                                    jar = root.getWebPath() + classifier + "/" + fileName;
                                 }
 
                             if (jar == null)
                                 continue;
                             versions.put(gameVersion, new ForgeRemoteVersion(
-                                    version.getGameVersion(), version.getVersion(), jar
+                                    version.getGameVersion(), version.getVersion(), Collections.singletonList(jar)
                             ));
                         }
                     }

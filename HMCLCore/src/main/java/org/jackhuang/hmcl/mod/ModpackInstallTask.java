@@ -1,6 +1,6 @@
 /*
  * Hello Minecraft! Launcher
- * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
+ * Copyright (C) 2020  huangyuhui <huanghongxun2008@126.com> and contributors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -89,8 +89,9 @@ public class ModpackInstallTask<T> extends Task<Void> {
                         // If both old and new modpacks have this entry, but the file is deleted by user, leave it missing.
                         return false;
                     } else {
-                        // If user modified this entry file, we will not replace this file since this modified file is that user expects.
-                        String fileHash = encodeHex(digest("SHA-1", Files.newInputStream(destPath)));
+                        // If both old and new modpacks have this entry, and user has modified this file,
+                        // we will not replace it since this modified file is what user expects.
+                        String fileHash = encodeHex(digest("SHA-1", destPath));
                         String oldHash = files.get(entryPath).getHash();
                         return Objects.equals(oldHash, fileHash);
                     }

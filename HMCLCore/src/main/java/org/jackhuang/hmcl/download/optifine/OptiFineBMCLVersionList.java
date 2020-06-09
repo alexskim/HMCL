@@ -1,6 +1,6 @@
 /*
  * Hello Minecraft! Launcher
- * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
+ * Copyright (C) 2020  huangyuhui <huanghongxun2008@126.com> and contributors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -18,7 +18,6 @@
 package org.jackhuang.hmcl.download.optifine;
 
 import com.google.gson.reflect.TypeToken;
-import org.jackhuang.hmcl.download.DownloadProvider;
 import org.jackhuang.hmcl.download.VersionList;
 import org.jackhuang.hmcl.task.GetTask;
 import org.jackhuang.hmcl.task.Task;
@@ -34,10 +33,13 @@ import java.util.*;
  * @author huangyuhui
  */
 public final class OptiFineBMCLVersionList extends VersionList<OptiFineRemoteVersion> {
+    private final String apiRoot;
 
-    public static final OptiFineBMCLVersionList INSTANCE = new OptiFineBMCLVersionList();
-
-    private OptiFineBMCLVersionList() {
+    /**
+     * @param apiRoot API Root of BMCLAPI implementations
+     */
+    public OptiFineBMCLVersionList(String apiRoot) {
+        this.apiRoot = apiRoot;
     }
 
     @Override
@@ -46,8 +48,8 @@ public final class OptiFineBMCLVersionList extends VersionList<OptiFineRemoteVer
     }
 
     @Override
-    public Task<?> refreshAsync(DownloadProvider downloadProvider) {
-        GetTask task = new GetTask(NetworkUtils.toURL("http://bmclapi2.bangbang93.com/optifine/versionlist"));
+    public Task<?> refreshAsync() {
+        GetTask task = new GetTask(NetworkUtils.toURL(apiRoot + "/optifine/versionlist"));
         return new Task<Void>() {
             @Override
             public Collection<Task<?>> getDependents() {
@@ -65,7 +67,7 @@ public final class OptiFineBMCLVersionList extends VersionList<OptiFineRemoteVer
                     }.getType());
                     for (OptiFineVersion element : root) {
                         String version = element.getType() + "_" + element.getPatch();
-                        String mirror = "http://bmclapi2.bangbang93.com/optifine/" + element.getGameVersion() + "/" + element.getType() + "/" + element.getPatch();
+                        String mirror = "https://bmclapi2.bangbang93.com/optifine/" + element.getGameVersion() + "/" + element.getType() + "/" + element.getPatch();
                         if (!duplicates.add(mirror))
                             continue;
 
@@ -75,7 +77,7 @@ public final class OptiFineBMCLVersionList extends VersionList<OptiFineRemoteVer
                             continue;
 
                         String gameVersion = VersionNumber.normalize(element.getGameVersion());
-                        versions.put(gameVersion, new OptiFineRemoteVersion(gameVersion, version, mirror, isPre));
+                        versions.put(gameVersion, new OptiFineRemoteVersion(gameVersion, version, Collections.singletonList(mirror), isPre));
                     }
                 } finally {
                     lock.writeLock().unlock();

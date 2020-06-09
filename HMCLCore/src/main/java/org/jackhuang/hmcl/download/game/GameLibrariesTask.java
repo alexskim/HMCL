@@ -1,6 +1,6 @@
 /*
  * Hello Minecraft! Launcher
- * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
+ * Copyright (C) 2020  huangyuhui <huanghongxun2008@126.com> and contributors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -18,13 +18,20 @@
 package org.jackhuang.hmcl.download.game;
 
 import org.jackhuang.hmcl.download.AbstractDependencyManager;
+import org.jackhuang.hmcl.game.GameRepository;
 import org.jackhuang.hmcl.game.Library;
 import org.jackhuang.hmcl.game.Version;
+import org.jackhuang.hmcl.task.FileDownloadTask;
 import org.jackhuang.hmcl.task.Task;
+import org.jackhuang.hmcl.util.Logging;
+import org.jackhuang.hmcl.util.io.FileUtils;
 
 import java.io.File;
+import java.io.IOException;
+import java.nio.file.Path;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.logging.Level;
 
 /**
  * This task is to download game libraries.
@@ -36,6 +43,7 @@ public final class GameLibrariesTask extends Task<Void> {
 
     private final AbstractDependencyManager dependencyManager;
     private final Version version;
+    private final boolean integrityCheck;
     private final List<Library> libraries;
     private final List<Task<?>> dependencies = new LinkedList<>();
 
@@ -43,21 +51,22 @@ public final class GameLibrariesTask extends Task<Void> {
      * Constructor.
      *
      * @param dependencyManager the dependency manager that can provides {@link org.jackhuang.hmcl.game.GameRepository}
-     * @param version the game version
+     * @param version           the game version
      */
-    public GameLibrariesTask(AbstractDependencyManager dependencyManager, Version version) {
-        this(dependencyManager, version, version.resolve(dependencyManager.getGameRepository()).getLibraries());
+    public GameLibrariesTask(AbstractDependencyManager dependencyManager, Version version, boolean integrityCheck) {
+        this(dependencyManager, version, integrityCheck, version.resolve(dependencyManager.getGameRepository()).getLibraries());
     }
 
     /**
      * Constructor.
      *
      * @param dependencyManager the dependency manager that can provides {@link org.jackhuang.hmcl.game.GameRepository}
-     * @param version the game version
+     * @param version           the game version
      */
-    public GameLibrariesTask(AbstractDependencyManager dependencyManager, Version version, List<Library> libraries) {
+    public GameLibrariesTask(AbstractDependencyManager dependencyManager, Version version, boolean integrityCheck, List<Library> libraries) {
         this.dependencyManager = dependencyManager;
         this.version = version;
+        this.integrityCheck = integrityCheck;
         this.libraries = libraries;
 
         setSignificance(TaskSignificance.MODERATE);
@@ -68,14 +77,42 @@ public final class GameLibrariesTask extends Task<Void> {
         return dependencies;
     }
 
+    public static boolean shouldDownloadLibrary(GameRepository gameRepository, Version version, Library library, boolean integrityCheck) {
+        File file = gameRepository.getLibraryFile(version, library);
+        Path jar = file.toPath();
+        if (!file.isFile()) return true;
+        try {
+            if (integrityCheck && !library.getDownload().validateChecksum(jar, true)) return true;
+            if (integrityCheck &&
+                    library.getChecksums() != null && !library.getChecksums().isEmpty() &&
+                    !LibraryDownloadTask.checksumValid(file, library.getChecksums())) return true;
+            if (integrityCheck) {
+                String ext = FileUtils.getExtension(file);
+                if (ext.equals("jar")) {
+                    try {
+                        FileDownloadTask.ZIP_INTEGRITY_CHECK_HANDLER.checkIntegrity(jar, jar);
+                    } catch (IOException ignored) {
+                        // the Jar file is malformed, so re-download it.
+                        return true;
+                    }
+                }
+            }
+        } catch (IOException e) {
+            Logging.LOG.log(Level.WARNING, "Unable to calc hash value of file " + jar, e);
+        }
+
+        return false;
+    }
+
     @Override
     public void execute() {
         libraries.stream().filter(Library::appliesToCurrentEnvironment).forEach(library -> {
             File file = dependencyManager.getGameRepository().getLibraryFile(version, library);
-            if (!file.exists())
+            if (shouldDownloadLibrary(dependencyManager.getGameRepository(), version, library, integrityCheck)) {
                 dependencies.add(new LibraryDownloadTask(dependencyManager, file, library));
-            else
+            } else {
                 dependencyManager.getCacheRepository().tryCacheLibrary(library, file.toPath());
+            }
         });
     }
 

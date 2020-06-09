@@ -1,6 +1,6 @@
 /*
  * Hello Minecraft! Launcher
- * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
+ * Copyright (C) 2020  huangyuhui <huanghongxun2008@126.com> and contributors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -23,7 +23,6 @@ import org.jackhuang.hmcl.task.FileDownloadTask;
 import org.jackhuang.hmcl.task.FileDownloadTask.IntegrityCheck;
 import org.jackhuang.hmcl.task.Task;
 import org.jackhuang.hmcl.util.CacheRepository;
-import org.jackhuang.hmcl.util.io.NetworkUtils;
 
 import java.io.File;
 import java.util.Collection;
@@ -31,7 +30,7 @@ import java.util.LinkedList;
 import java.util.List;
 
 /**
- *
+ * Task to download Minecraft jar
  * @author huangyuhui
  */
 public final class GameDownloadTask extends Task<Void> {
@@ -58,11 +57,11 @@ public final class GameDownloadTask extends Task<Void> {
         File jar = dependencyManager.getGameRepository().getVersionJar(version);
 
         FileDownloadTask task = new FileDownloadTask(
-                NetworkUtils.toURL(dependencyManager.getDownloadProvider().injectURL(version.getDownloadInfo().getUrl())),
+                dependencyManager.getDownloadProvider().injectURLWithCandidates(version.getDownloadInfo().getUrl()),
                 jar,
-                IntegrityCheck.of(CacheRepository.SHA1, version.getDownloadInfo().getSha1()))
-                .setCaching(true)
-                .setCacheRepository(dependencyManager.getCacheRepository());
+                IntegrityCheck.of(CacheRepository.SHA1, version.getDownloadInfo().getSha1()));
+        task.setCaching(true);
+        task.setCacheRepository(dependencyManager.getCacheRepository());
 
         if (gameVersion != null)
             task.setCandidate(dependencyManager.getCacheRepository().getCommonDirectory().resolve("jars").resolve(gameVersion + ".jar"));

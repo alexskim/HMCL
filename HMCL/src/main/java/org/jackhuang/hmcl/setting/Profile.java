@@ -1,6 +1,6 @@
 /*
  * Hello Minecraft! Launcher
- * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
+ * Copyright (C) 2020  huangyuhui <huanghongxun2008@126.com> and contributors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -24,6 +24,7 @@ import javafx.beans.InvalidationListener;
 import javafx.beans.Observable;
 import javafx.beans.property.*;
 import org.jackhuang.hmcl.download.DefaultDependencyManager;
+import org.jackhuang.hmcl.download.DownloadProvider;
 import org.jackhuang.hmcl.event.EventBus;
 import org.jackhuang.hmcl.event.EventPriority;
 import org.jackhuang.hmcl.event.RefreshedVersionsEvent;
@@ -162,17 +163,15 @@ public final class Profile implements Observable {
     }
 
     public DefaultDependencyManager getDependency() {
-        return new DefaultDependencyManager(repository, DownloadProviders.getDownloadProvider(), HMCLCacheRepository.REPOSITORY);
+        return getDependency(DownloadProviders.getDownloadProvider());
+    }
+
+    public DefaultDependencyManager getDependency(DownloadProvider downloadProvider) {
+        return new DefaultDependencyManager(repository, downloadProvider, HMCLCacheRepository.REPOSITORY);
     }
 
     public VersionSetting getVersionSetting(String id) {
-        VersionSetting vs = repository.getVersionSetting(id);
-        if (vs == null || vs.isUsesGlobal()) {
-            getGlobal().setGlobal(true); // always keep global.isGlobal = true
-            getGlobal().setUsesGlobal(true);
-            return getGlobal();
-        } else
-            return vs;
+        return repository.getVersionSetting(id);
     }
 
     @Override

@@ -1,6 +1,6 @@
 /*
  * Hello Minecraft! Launcher
- * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
+ * Copyright (C) 2020  huangyuhui <huanghongxun2008@126.com> and contributors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -126,7 +126,7 @@ class ComponentListCell extends StackPane {
             VBox container = new VBox();
             container.setPadding(new Insets(8, 0, 0, 0));
             FXUtils.setLimitHeight(container, 0);
-            FXUtils.setOverflowHidden(container, true);
+            FXUtils.setOverflowHidden(container);
             container.getChildren().setAll(content);
             groupNode.setBottom(container);
 
@@ -143,6 +143,7 @@ class ComponentListCell extends StackPane {
 
                 if (isExpanded()) {
                     updateClip(newHeight);
+                    list.onExpand();
                 }
 
                 expandAnimation = new Timeline(new KeyFrame(new Duration(320.0),
@@ -161,8 +162,9 @@ class ComponentListCell extends StackPane {
                     expandIcon.setRotate(newValue ? 180 : 0));
 
             getChildren().setAll(groupNode);
-        } else
+        } else {
             getChildren().setAll(content);
+        }
     }
 
     public boolean isExpanded() {

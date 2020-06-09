@@ -1,6 +1,6 @@
 /*
  * Hello Minecraft! Launcher
- * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
+ * Copyright (C) 2020  huangyuhui <huanghongxun2008@126.com> and contributors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -15,24 +15,17 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-package org.jackhuang.hmcl.setting;
+package org.jackhuang.hmcl.download;
 
-/**
- * Determines where game runs in and game files such as mods.
- *
- * @author huangyuhui
- */
-public enum EnumGameDirectory {
-    /**
-     * .minecraft
-     */
-    ROOT_FOLDER,
-    /**
-     * .minecraft/versions/&lt;version name&gt;
-     */
-    VERSION_FOLDER,
-    /**
-     * user customized directory.
-     */
-    CUSTOM
+import java.io.IOException;
+
+public class ArtifactMalformedException extends IOException {
+    public ArtifactMalformedException(String message) {
+        super(message);
+    }
+
+    public ArtifactMalformedException(String message, Throwable cause) {
+        super(message, cause);
+    }
 }
+

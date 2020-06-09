@@ -1,6 +1,6 @@
 /*
  * Hello Minecraft! Launcher
- * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
+ * Copyright (C) 2020  huangyuhui <huanghongxun2008@126.com> and contributors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -25,6 +25,7 @@ import javafx.event.EventHandler;
 import javafx.scene.Node;
 import javafx.scene.control.Control;
 import javafx.scene.control.Skin;
+import javafx.scene.input.MouseEvent;
 import javafx.scene.layout.Background;
 import javafx.scene.layout.StackPane;
 import javafx.stage.Stage;
@@ -35,19 +36,21 @@ public class Decorator extends Control {
     private final ListProperty<Node> content = new SimpleListProperty<>(FXCollections.observableArrayList());
     private final ListProperty<Node> container = new SimpleListProperty<>(FXCollections.observableArrayList());
     private final ObjectProperty<Background> contentBackground = new SimpleObjectProperty<>();
-    private final StringProperty title = new SimpleStringProperty();
+    private final ObjectProperty<DecoratorPage.State> state = new SimpleObjectProperty<>();
     private final StringProperty drawerTitle = new SimpleStringProperty();
     private final ObjectProperty<Runnable> onCloseButtonAction = new SimpleObjectProperty<>();
     private final ObjectProperty<EventHandler<ActionEvent>> onCloseNavButtonAction = new SimpleObjectProperty<>();
     private final ObjectProperty<EventHandler<ActionEvent>> onBackNavButtonAction = new SimpleObjectProperty<>();
     private final ObjectProperty<EventHandler<ActionEvent>> onRefreshNavButtonAction = new SimpleObjectProperty<>();
-    private final BooleanProperty closeNavButtonVisible = new SimpleBooleanProperty(true);
     private final BooleanProperty canRefresh = new SimpleBooleanProperty(false);
     private final BooleanProperty canBack = new SimpleBooleanProperty(false);
     private final BooleanProperty canClose = new SimpleBooleanProperty(false);
     private final BooleanProperty showCloseAsHome = new SimpleBooleanProperty(false);
     private final Stage primaryStage;
     private StackPane drawerWrapper;
+
+    private final ReadOnlyBooleanWrapper allowMove = new ReadOnlyBooleanWrapper();
+    private final ReadOnlyBooleanWrapper dragging = new ReadOnlyBooleanWrapper();
 
     public Decorator(Stage primaryStage) {
         this.primaryStage = primaryStage;
@@ -63,7 +66,7 @@ public class Decorator extends Control {
         return drawerWrapper;
     }
 
-    void setDrawerWrapper(StackPane drawerWrapper) {
+    public void setDrawerWrapper(StackPane drawerWrapper) {
         this.drawerWrapper = drawerWrapper;
     }
 
@@ -91,16 +94,16 @@ public class Decorator extends Control {
         this.content.set(content);
     }
 
-    public String getTitle() {
-        return title.get();
+    public DecoratorPage.State getState() {
+        return state.get();
     }
 
-    public StringProperty titleProperty() {
-        return title;
+    public ObjectProperty<DecoratorPage.State> stateProperty() {
+        return state;
     }
 
-    public void setTitle(String title) {
-        this.title.set(title);
+    public void setState(DecoratorPage.State state) {
+        this.state.set(state);
     }
 
     public String getDrawerTitle() {
@@ -125,18 +128,6 @@ public class Decorator extends Control {
 
     public void setOnCloseButtonAction(Runnable onCloseButtonAction) {
         this.onCloseButtonAction.set(onCloseButtonAction);
-    }
-
-    public boolean isCloseNavButtonVisible() {
-        return closeNavButtonVisible.get();
-    }
-
-    public BooleanProperty closeNavButtonVisibleProperty() {
-        return closeNavButtonVisible;
-    }
-
-    public void setCloseNavButtonVisible(boolean closeNavButtonVisible) {
-        this.closeNavButtonVisible.set(closeNavButtonVisible);
     }
 
     public ObservableList<Node> getContainer() {
@@ -179,6 +170,30 @@ public class Decorator extends Control {
         return showCloseAsHome;
     }
 
+    public boolean isAllowMove() {
+        return allowMove.get();
+    }
+
+    public ReadOnlyBooleanProperty allowMoveProperty() {
+        return allowMove.getReadOnlyProperty();
+    }
+
+    void setAllowMove(boolean allowMove) {
+        this.allowMove.set(allowMove);
+    }
+
+    public boolean isDragging() {
+        return dragging.get();
+    }
+
+    public ReadOnlyBooleanProperty draggingProperty() {
+        return dragging.getReadOnlyProperty();
+    }
+
+    void setDragging(boolean dragging) {
+        this.dragging.set(dragging);
+    }
+
     public ObjectProperty<EventHandler<ActionEvent>> onBackNavButtonActionProperty() {
         return onBackNavButtonAction;
     }
@@ -202,5 +217,12 @@ public class Decorator extends Control {
 
     public void close() {
         onCloseButtonAction.get().run();
+    }
+
+    public void capableDraggingWindow(Node node) {
+        node.addEventHandler(MouseEvent.MOUSE_ENTERED, e -> allowMove.set(true));
+        node.addEventHandler(MouseEvent.MOUSE_EXITED, e -> {
+            if (!isDragging()) allowMove.set(false);
+        });
     }
 }

@@ -1,6 +1,6 @@
 /*
  * Hello Minecraft! Launcher
- * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
+ * Copyright (C) 2020  huangyuhui <huanghongxun2008@126.com> and contributors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -27,24 +27,22 @@ import javafx.beans.binding.Bindings;
 import javafx.beans.value.ChangeListener;
 import javafx.beans.value.ObservableValue;
 import javafx.event.EventHandler;
-import javafx.geometry.Insets;
 import javafx.scene.Cursor;
 import javafx.scene.Node;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
 import javafx.scene.input.DragEvent;
 import javafx.scene.layout.*;
-import javafx.scene.paint.Color;
 import javafx.stage.Stage;
 import javafx.util.Duration;
 import org.jackhuang.hmcl.Launcher;
-import org.jackhuang.hmcl.Metadata;
 import org.jackhuang.hmcl.auth.authlibinjector.AuthlibInjectorDnD;
 import org.jackhuang.hmcl.setting.Config;
 import org.jackhuang.hmcl.setting.EnumBackgroundImage;
 import org.jackhuang.hmcl.ui.Controllers;
 import org.jackhuang.hmcl.ui.FXUtils;
 import org.jackhuang.hmcl.ui.account.AddAuthlibInjectorServerPane;
+import org.jackhuang.hmcl.ui.animation.ContainerAnimations;
 import org.jackhuang.hmcl.ui.construct.DialogAware;
 import org.jackhuang.hmcl.ui.construct.DialogCloseEvent;
 import org.jackhuang.hmcl.ui.construct.Navigator;
@@ -61,6 +59,7 @@ import java.util.Locale;
 import java.util.Optional;
 import java.util.Random;
 import java.util.logging.Level;
+import java.util.stream.Stream;
 
 import static java.util.stream.Collectors.toList;
 import static org.jackhuang.hmcl.setting.ConfigHolder.config;
@@ -73,20 +72,15 @@ public class DecoratorController {
     private final Decorator decorator;
     private final ImageView welcomeView;
     private final Navigator navigator;
-    private final Node mainPage;
 
     private JFXDialog dialog;
     private StackContainerPane dialogPane;
 
     public DecoratorController(Stage stage, Node mainPage) {
-        this.mainPage = mainPage;
-
         decorator = new Decorator(stage);
-        decorator.titleProperty().set(Metadata.TITLE);
         decorator.setOnCloseButtonAction(Launcher::stopApplication);
 
         navigator = new Navigator();
-        navigator.setOnNavigating(this::onNavigating);
         navigator.setOnNavigated(this::onNavigated);
         navigator.init(mainPage);
 
@@ -178,9 +172,9 @@ public class DecoratorController {
         }
 
         List<Path> candidates;
-        try {
-            candidates = Files.list(imageDir)
-                    .filter(Files::isRegularFile)
+        try (Stream<Path> stream = Files.list(imageDir)) {
+            candidates = stream
+                .filter(Files::isRegularFile)
                     .filter(it -> {
                         String filename = it.getFileName().toString();
                         return filename.endsWith(".png") || filename.endsWith(".jpg");
@@ -224,8 +218,8 @@ public class DecoratorController {
         if (navigator.getCurrentPage() instanceof DecoratorPage) {
             DecoratorPage page = (DecoratorPage) navigator.getCurrentPage();
 
-            if (page.canForceToClose()) {
-                page.onForceToClose();
+            if (page.isPageCloseable()) {
+                page.closePage();
                 return;
             }
         }
@@ -236,7 +230,7 @@ public class DecoratorController {
         if (navigator.getCurrentPage() instanceof DecoratorPage) {
             DecoratorPage page = (DecoratorPage) navigator.getCurrentPage();
 
-            if (page.onClose())
+            if (page.back())
                 navigator.close();
         } else {
             navigator.close();
@@ -247,44 +241,44 @@ public class DecoratorController {
         if (navigator.getCurrentPage() instanceof Refreshable) {
             Refreshable refreshable = (Refreshable) navigator.getCurrentPage();
 
-            if (refreshable.canRefreshProperty().get())
+            if (refreshable.refreshableProperty().get())
                 refreshable.refresh();
         }
     }
 
     private void onNavigating(Navigator.NavigationEvent event) {
+        if (event.getSource() != this.navigator) return;
         Node from = event.getNode();
 
         if (from instanceof DecoratorPage)
-            ((DecoratorPage) from).onClose();
+            ((DecoratorPage) from).back();
     }
 
     private void onNavigated(Navigator.NavigationEvent event) {
+        if (event.getSource() != this.navigator) return;
         Node to = event.getNode();
 
         if (to instanceof Refreshable) {
-            decorator.canRefreshProperty().bind(((Refreshable) to).canRefreshProperty());
+            decorator.canRefreshProperty().bind(((Refreshable) to).refreshableProperty());
         } else {
             decorator.canRefreshProperty().unbind();
             decorator.canRefreshProperty().set(false);
         }
 
+        decorator.canCloseProperty().set(navigator.size() > 2);
+
         if (to instanceof DecoratorPage) {
-            decorator.drawerTitleProperty().bind(((DecoratorPage) to).titleProperty());
-            decorator.showCloseAsHomeProperty().set(!((DecoratorPage) to).canForceToClose());
+            decorator.showCloseAsHomeProperty().set(!((DecoratorPage) to).isPageCloseable());
         } else {
-            decorator.drawerTitleProperty().unbind();
-            decorator.drawerTitleProperty().set("");
             decorator.showCloseAsHomeProperty().set(true);
         }
 
-        decorator.canBackProperty().set(navigator.canGoBack());
-        decorator.canCloseProperty().set(navigator.canGoBack());
-
-        if (navigator.canGoBack()) {
-            decorator.setContentBackground(new Background(new BackgroundFill(Color.rgb(244, 244, 244, 0.5), CornerRadii.EMPTY, Insets.EMPTY)));
+        // state property should be updated at last.
+        if (to instanceof DecoratorPage) {
+            decorator.stateProperty().bind(((DecoratorPage) to).stateProperty());
         } else {
-            decorator.setContentBackground(null);
+            decorator.stateProperty().unbind();
+            decorator.stateProperty().set(new DecoratorPage.State("", null, navigator.canGoBack(), false, true));
         }
 
         if (to instanceof Region) {
@@ -308,16 +302,15 @@ public class DecoratorController {
                 Platform.runLater(() -> showDialog(node));
                 return;
             }
-
             dialog = new JFXDialog();
             dialogPane = new StackContainerPane();
 
             dialog.setContent(dialogPane);
+            decorator.capableDraggingWindow(dialog);
             dialog.setDialogContainer(decorator.getDrawerWrapper());
             dialog.setOverlayClose(false);
             dialog.show();
         }
-
         dialogPane.push(node);
 
         EventHandler<DialogCloseEvent> handler = event -> closeDialog(node);
@@ -369,7 +362,7 @@ public class DecoratorController {
     public void startWizard(WizardProvider wizardProvider, String category) {
         FXUtils.checkFxUserThread();
 
-        getNavigator().navigate(new DecoratorWizardDisplayer(wizardProvider, category));
+        getNavigator().navigate(new DecoratorWizardDisplayer(wizardProvider, category), ContainerAnimations.FADE.getAnimationProducer());
     }
 
     // ==== Authlib Injector DnD ====

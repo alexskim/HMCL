@@ -1,6 +1,6 @@
 /*
  * Hello Minecraft! Launcher
- * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
+ * Copyright (C) 2020  huangyuhui <huanghongxun2008@126.com> and contributors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -77,6 +77,8 @@ public final class CompressingUtils {
                     return testZipPath(dir, root, result);
                 }
             });
+        } catch (IllegalArgumentException e) {
+            throw new IOException(e);
         }
         return result.get();
     }
@@ -178,9 +180,9 @@ public final class CompressingUtils {
             // Since Java 8 throws ZipError stupidly
             throw new ZipException(error.getMessage());
         } catch (UnsupportedOperationException ex) {
-            throw new IOException("Not a zip file", ex);
+            throw new ZipException("Not a zip file");
         } catch (FileSystemNotFoundException ex) {
-            throw new IOException("Java Environment is broken");
+            throw new ZipException("Java Environment is broken");
         }
     }
 

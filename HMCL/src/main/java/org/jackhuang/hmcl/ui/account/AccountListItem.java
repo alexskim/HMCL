@@ -1,6 +1,6 @@
 /*
  * Hello Minecraft! Launcher
- * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
+ * Copyright (C) 2020  huangyuhui <huanghongxun2008@126.com> and contributors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -23,22 +23,29 @@ import javafx.beans.property.*;
 import javafx.scene.control.RadioButton;
 import javafx.scene.control.Skin;
 import javafx.scene.image.Image;
+import javafx.stage.FileChooser;
 import org.jackhuang.hmcl.auth.Account;
 import org.jackhuang.hmcl.auth.AuthenticationException;
 import org.jackhuang.hmcl.auth.CredentialExpiredException;
 import org.jackhuang.hmcl.auth.authlibinjector.AuthlibInjectorAccount;
 import org.jackhuang.hmcl.auth.authlibinjector.AuthlibInjectorServer;
 import org.jackhuang.hmcl.auth.offline.OfflineAccount;
+import org.jackhuang.hmcl.auth.yggdrasil.YggdrasilAccount;
 import org.jackhuang.hmcl.game.TexturesLoader;
 import org.jackhuang.hmcl.setting.Accounts;
+import org.jackhuang.hmcl.task.Schedulers;
+import org.jackhuang.hmcl.task.Task;
+import org.jackhuang.hmcl.ui.Controllers;
 import org.jackhuang.hmcl.ui.DialogController;
+import org.jackhuang.hmcl.ui.construct.PromptDialogPane;
+
+import java.io.File;
+import java.util.concurrent.CancellationException;
+import java.util.logging.Level;
 
 import static org.jackhuang.hmcl.util.Lang.thread;
 import static org.jackhuang.hmcl.util.Logging.LOG;
 import static org.jackhuang.hmcl.util.i18n.I18n.i18n;
-
-import java.util.concurrent.CancellationException;
-import java.util.logging.Level;
 
 public class AccountListItem extends RadioButton {
 
@@ -77,9 +84,9 @@ public class AccountListItem extends RadioButton {
         return new AccountListItemSkin(this);
     }
 
-    public void refresh() {
-        account.clearCache();
-        thread(() -> {
+    private Task<?> refreshAsync() {
+        return Task.runAsync(() -> {
+            account.clearCache();
             try {
                 account.logIn();
             } catch (CredentialExpiredException e) {
@@ -89,11 +96,50 @@ public class AccountListItem extends RadioButton {
                     // ignore cancellation
                 } catch (Exception e1) {
                     LOG.log(Level.WARNING, "Failed to refresh " + account + " with password", e1);
+                    throw e1;
                 }
             } catch (AuthenticationException e) {
                 LOG.log(Level.WARNING, "Failed to refresh " + account + " with token", e);
+                throw e;
             }
         });
+    }
+
+    public void refresh() {
+        refreshAsync().whenComplete(e -> {}).start();
+    }
+
+    public boolean canUploadSkin() {
+        return account instanceof YggdrasilAccount && !(account instanceof AuthlibInjectorAccount);
+    }
+
+    public void uploadSkin() {
+        if (!(account instanceof YggdrasilAccount)) {
+            return;
+        }
+
+        FileChooser chooser = new FileChooser();
+        chooser.setTitle(i18n("account.skin.upload"));
+        chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter(i18n("account.skin.file"), "*.png"));
+        File selectedFile = chooser.showOpenDialog(Controllers.getStage());
+        if (selectedFile == null) {
+            return;
+        }
+
+        Controllers.prompt(new PromptDialogPane.Builder(i18n("account.skin.upload"), (questions, resolve, reject) -> {
+            PromptDialogPane.Builder.CandidatesQuestion q = (PromptDialogPane.Builder.CandidatesQuestion) questions.get(0);
+            String model = q.getValue() == 0 ? "" : "slim";
+            refreshAsync()
+                    .thenRunAsync(() -> ((YggdrasilAccount) account).uploadSkin(model, selectedFile.toPath()))
+                    .thenComposeAsync(this::refreshAsync)
+                    .thenRunAsync(Schedulers.javafx(), resolve::run)
+                    .whenComplete(Schedulers.javafx(), e -> {
+                        if (e != null) {
+                            reject.accept(AddAccountPane.accountException(e));
+                        }
+                    }).start();
+        }).addQuestion(new PromptDialogPane.Builder.CandidatesQuestion(i18n("account.skin.model"),
+                i18n("account.skin.model.default"), i18n("account.skin.model.slim"))));
     }
 
     public void remove() {

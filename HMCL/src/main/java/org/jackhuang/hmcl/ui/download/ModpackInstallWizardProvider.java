@@ -1,6 +1,6 @@
 /*
  * Hello Minecraft! Launcher
- * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
+ * Copyright (C) 2020  huangyuhui <huanghongxun2008@126.com> and contributors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -107,6 +107,7 @@ public class ModpackInstallWizardProvider implements WizardProvider {
 
     @Override
     public Object finish(Map<String, Object> settings) {
+        settings.put("title", i18n("install.modpack"));
         settings.put("success_message", i18n("install.success"));
         settings.put("failure_callback", new FailureCallback() {
             @Override
@@ -115,10 +116,10 @@ public class ModpackInstallWizardProvider implements WizardProvider {
                     if (exception.getCause() instanceof FileNotFoundException) {
                         Controllers.dialog(i18n("modpack.type.curse.not_found"), i18n("install.failed"), MessageType.ERROR, next);
                     } else {
-                        Controllers.dialog(i18n("modpack.type.curse.tolerable_error"), i18n("install.success"), MessageType.INFORMATION, next);
+                        Controllers.dialog(i18n("install.success"), i18n("install.success"), MessageType.INFORMATION, next);
                     }
                 } else {
-                    InstallerWizardProvider.alertFailureMessage(exception, next);
+                    UpdateInstallerWizardProvider.alertFailureMessage(exception, next);
                 }
             }
         });

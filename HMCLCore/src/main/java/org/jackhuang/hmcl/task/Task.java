@@ -1,6 +1,6 @@
 /*
  * Hello Minecraft! Launcher
- * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
+ * Copyright (C) 2020  huangyuhui <huanghongxun2008@126.com> and contributors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -24,6 +24,7 @@ import javafx.beans.property.ReadOnlyStringProperty;
 import javafx.beans.property.ReadOnlyStringWrapper;
 import org.jackhuang.hmcl.event.EventManager;
 import org.jackhuang.hmcl.util.InvocationDispatcher;
+import org.jackhuang.hmcl.util.Lang;
 import org.jackhuang.hmcl.util.Logging;
 import org.jackhuang.hmcl.util.ReflectionHelper;
 import org.jackhuang.hmcl.util.function.ExceptionalConsumer;
@@ -31,14 +32,16 @@ import org.jackhuang.hmcl.util.function.ExceptionalFunction;
 import org.jackhuang.hmcl.util.function.ExceptionalRunnable;
 import org.jackhuang.hmcl.util.function.ExceptionalSupplier;
 
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.Collections;
+import java.util.*;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.Executor;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
+import java.util.function.UnaryOperator;
 import java.util.logging.Level;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * Disposable task.
@@ -58,8 +61,55 @@ public abstract class Task<T> {
         return significance;
     }
 
-    public final void setSignificance(TaskSignificance significance) {
+    public final Task<T> setSignificance(TaskSignificance significance) {
         this.significance = significance;
+        return this;
+    }
+
+    // cancel
+    private Supplier<Boolean> cancelled;
+
+    final void setCancelled(Supplier<Boolean> cancelled) {
+        this.cancelled = cancelled;
+    }
+
+    protected final boolean isCancelled() {
+        if (Thread.interrupted()) {
+            Thread.currentThread().interrupt();
+            return true;
+        }
+
+        return cancelled != null ? cancelled.get() : false;
+    }
+
+    // stage
+    private String stage = null;
+
+    /**
+     * Stage of task implies the goal of this task, for grouping tasks.
+     * Stage will inherit from the parent task.
+     */
+    public String getStage() {
+        return stage;
+    }
+
+    /**
+     * You must initialize stage in constructor.
+     * @param stage the stage
+     */
+    final void setStage(String stage) {
+        this.stage = stage;
+    }
+
+    public List<String> getStages() {
+        return getStage() == null ? Collections.emptyList() : Collections.singletonList(getStage());
+    }
+
+    Map<String, Object> properties;
+
+    protected Map<String, Object> getProperties() {
+        if (properties == null) properties = new HashMap<>();
+        return properties;
     }
 
     // state
@@ -260,7 +310,7 @@ public abstract class Task<T> {
         return progress.getReadOnlyProperty();
     }
 
-    protected void updateProgress(int progress, int total) {
+    protected void updateProgress(long progress, long total) {
         updateProgress(1.0 * progress / total);
     }
 
@@ -310,18 +360,35 @@ public abstract class Task<T> {
     }
 
     public final TaskExecutor executor() {
-        return new TaskExecutor(this);
+        return new AsyncTaskExecutor(this);
     }
 
     public final TaskExecutor executor(boolean start) {
-        TaskExecutor executor = new TaskExecutor(this);
+        TaskExecutor executor = new AsyncTaskExecutor(this);
         if (start)
             executor.start();
         return executor;
     }
 
     public final TaskExecutor executor(TaskListener taskListener) {
-        TaskExecutor executor = new TaskExecutor(this);
+        TaskExecutor executor = new AsyncTaskExecutor(this);
+        executor.addTaskListener(taskListener);
+        return executor;
+    }
+
+    public final TaskExecutor cancellableExecutor() {
+        return new CancellableTaskExecutor(this);
+    }
+
+    public final TaskExecutor cancellableExecutor(boolean start) {
+        TaskExecutor executor = new CancellableTaskExecutor(this);
+        if (start)
+            executor.start();
+        return executor;
+    }
+
+    public final TaskExecutor cancellableExecutor(TaskListener taskListener) {
+        TaskExecutor executor = new CancellableTaskExecutor(this);
         executor.addTaskListener(taskListener);
         return executor;
     }
@@ -358,7 +425,7 @@ public abstract class Task<T> {
      * @return the new Task
      */
     public <U, E extends Exception> Task<U> thenApplyAsync(Executor executor, ExceptionalFunction<T, U, E> fn) {
-        return thenApplyAsync(getCaller(), executor, fn);
+        return thenApplyAsync(getCaller(), executor, fn).setSignificance(TaskSignificance.MODERATE);
     }
 
     /**
@@ -399,7 +466,7 @@ public abstract class Task<T> {
      * @return the new Task
      */
     public <E extends Exception> Task<Void> thenAcceptAsync(Executor executor, ExceptionalConsumer<T, E> action) {
-        return thenAcceptAsync(getCaller(), executor, action);
+        return thenAcceptAsync(getCaller(), executor, action).setSignificance(TaskSignificance.MODERATE);
     }
 
     /**
@@ -441,7 +508,7 @@ public abstract class Task<T> {
      * @return the new Task
      */
     public <E extends Exception> Task<Void> thenRunAsync(Executor executor, ExceptionalRunnable<E> action) {
-        return thenRunAsync(getCaller(), executor, action);
+        return thenRunAsync(getCaller(), executor, action).setSignificance(TaskSignificance.MODERATE);
     }
 
     /**
@@ -553,7 +620,7 @@ public abstract class Task<T> {
      * @return the new Task
      */
     public <E extends Exception> Task<Void> withRunAsync(Executor executor, ExceptionalRunnable<E> action) {
-        return withRunAsync(getCaller(), executor, action);
+        return withRunAsync(getCaller(), executor, action).setSignificance(TaskSignificance.MODERATE);
     }
 
     /**
@@ -635,7 +702,12 @@ public abstract class Task<T> {
             public boolean isRelyingOnDependents() {
                 return false;
             }
-        }.setExecutor(executor).setName(getCaller());
+
+            @Override
+            public List<String> getStages() {
+                return Lang.merge(Task.this.getStages(), super.getStages());
+            }
+        }.setExecutor(executor).setName(getCaller()).setSignificance(TaskSignificance.MODERATE);
     }
 
     /**
@@ -709,6 +781,36 @@ public abstract class Task<T> {
         return whenComplete(executor, () -> success.accept(getResult()), failure);
     }
 
+    public Task<T> withStage(String stage) {
+        StageTask task = new StageTask();
+        task.setStage(stage);
+        return task;
+    }
+
+    public Task<T> withStagesHint(List<String> stages) {
+        return new Task<T>() {
+
+            @Override
+            public Collection<Task<?>> getDependents() {
+                return Collections.singleton(Task.this);
+            }
+
+            @Override
+            public void execute() throws Exception {
+                setResult(Task.this.getResult());
+            }
+
+            @Override
+            public List<String> getStages() {
+                return stages;
+            }
+        };
+    }
+
+    public Task<T> withCounter() {
+        return new CountTask();
+    }
+
     public static Task<Void> runAsync(ExceptionalRunnable<?> closure) {
         return runAsync(Schedulers.defaultScheduler(), closure);
     }
@@ -718,7 +820,7 @@ public abstract class Task<T> {
     }
 
     public static Task<Void> runAsync(Executor executor, ExceptionalRunnable<?> closure) {
-        return runAsync(getCaller(), executor, closure);
+        return runAsync(getCaller(), executor, closure).setSignificance(TaskSignificance.MODERATE);
     }
 
     public static Task<Void> runAsync(String name, Executor executor, ExceptionalRunnable<?> closure) {
@@ -726,6 +828,10 @@ public abstract class Task<T> {
     }
 
     public static <T> Task<T> composeAsync(ExceptionalSupplier<Task<T>, ?> fn) {
+        return composeAsync(getCaller(), fn).setSignificance(TaskSignificance.MODERATE);
+    }
+
+    public static <T> Task<T> composeAsync(String name, ExceptionalSupplier<Task<T>, ?> fn) {
         return new Task<T>() {
             Task<T> then;
 
@@ -740,15 +846,20 @@ public abstract class Task<T> {
             public Collection<Task<?>> getDependencies() {
                 return then == null ? Collections.emptySet() : Collections.singleton(then);
             }
-        };
+
+            @Override
+            public List<String> getStages() {
+                return Lang.merge(super.getStages(), then == null ? null : then.getStages());
+            }
+        }.setName(name);
     }
 
     public static <V> Task<V> supplyAsync(Callable<V> callable) {
-        return supplyAsync(getCaller(), callable);
+        return supplyAsync(getCaller(), callable).setSignificance(TaskSignificance.MODERATE);
     }
 
     public static <V> Task<V> supplyAsync(Executor executor, Callable<V> callable) {
-        return supplyAsync(getCaller(), executor, callable);
+        return supplyAsync(getCaller(), executor, callable).setSignificance(TaskSignificance.MODERATE);
     }
 
     public static <V> Task<V> supplyAsync(String name, Callable<V> callable) {
@@ -798,6 +909,11 @@ public abstract class Task<T> {
             @Override
             public Collection<Task<?>> getDependents() {
                 return tasks;
+            }
+
+            @Override
+            public List<String> getStages() {
+                return tasks.stream().flatMap(task -> task.getStages().stream()).collect(Collectors.toList());
             }
         };
     }
@@ -866,6 +982,11 @@ public abstract class Task<T> {
         public void execute() throws Exception {
             setResult(callable.apply(Task.this.getResult()));
         }
+
+        @Override
+        public List<String> getStages() {
+            return Lang.merge(Task.this.getStages(), super.getStages());
+        }
     }
 
     /**
@@ -924,6 +1045,64 @@ public abstract class Task<T> {
         @Override
         public boolean isRelyingOnDependents() {
             return relyingOnDependents;
+        }
+
+        @Override
+        public List<String> getStages() {
+            return Stream.of(Task.this.getStages(), super.getStages(), succ == null ? Collections.<String>emptyList() : succ.getStages())
+                    .flatMap(Collection::stream)
+                    .collect(Collectors.toList());
+        }
+    }
+
+    public class StageTask extends Task<T> {
+
+        @Override
+        public Collection<Task<?>> getDependents() {
+            return Collections.singleton(Task.this);
+        }
+
+        @Override
+        public void execute() throws Exception {
+            setResult(Task.this.getResult());
+        }
+
+        @Override
+        public List<String> getStages() {
+            return Lang.merge(Task.this.getStages(), super.getStages());
+        }
+    }
+
+    private class CountTask extends Task<T> {
+        private final UnaryOperator<Integer> COUNTER = a -> {
+            int result = 0;
+            if (a != null) result += a;
+            return result + 1;
+        };
+
+        @Override
+        public Collection<Task<?>> getDependents() {
+            return Collections.singleton(Task.this);
+        }
+
+        @Override
+        public void execute() throws Exception {
+            setResult(Task.this.getResult());
+        }
+
+        @Override
+        public boolean doPostExecute() {
+            return true;
+        }
+
+        @Override
+        public void postExecute() {
+            getProperties().put("count", COUNTER);
+        }
+
+        @Override
+        public List<String> getStages() {
+            return Lang.merge(Task.this.getStages(), super.getStages());
         }
     }
 }

@@ -1,6 +1,6 @@
 /*
  * Hello Minecraft! Launcher
- * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
+ * Copyright (C) 2020  huangyuhui <huanghongxun2008@126.com> and contributors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -54,6 +54,10 @@ public final class CurseCompletionTask extends Task<Void> {
     private CurseManifest manifest;
     private final List<Task<?>> dependencies = new LinkedList<>();
 
+    private final AtomicBoolean allNameKnown = new AtomicBoolean(true);
+    private final AtomicInteger finished = new AtomicInteger(0);
+    private final AtomicBoolean notFound = new AtomicBoolean(false);
+
     /**
      * Constructor.
      *
@@ -94,15 +98,16 @@ public final class CurseCompletionTask extends Task<Void> {
     }
 
     @Override
+    public boolean isRelyingOnDependencies() {
+        return false;
+    }
+
+    @Override
     public void execute() throws Exception {
         if (manifest == null)
             return;
 
         File root = repository.getVersionRoot(version);
-
-        AtomicBoolean flag = new AtomicBoolean(true);
-        AtomicInteger finished = new AtomicInteger(0);
-        AtomicBoolean notFound = new AtomicBoolean(false);
 
         // Because in China, Curse is too difficult to visit,
         // if failed, ignore it and retry next time.
@@ -113,30 +118,36 @@ public final class CurseCompletionTask extends Task<Void> {
                             if (StringUtils.isBlank(file.getFileName())) {
                                 try {
                                     return file.withFileName(NetworkUtils.detectFileName(file.getUrl()));
-                                } catch (FileNotFoundException e) {
+                                } catch (IOException e) {
                                     try {
                                         String result = NetworkUtils.doGet(NetworkUtils.toURL(String.format("https://cursemeta.dries007.net/%d/%d.json", file.getProjectID(), file.getFileID())));
                                         CurseMetaMod mod = JsonUtils.fromNonNullJson(result, CurseMetaMod.class);
                                         return file.withFileName(mod.getFileNameOnDisk()).withURL(mod.getDownloadURL());
+                                    } catch (FileNotFoundException fof) {
+                                        Logging.LOG.log(Level.WARNING, "Could not query cursemeta for deleted mods: " + file.getUrl(), fof);
+                                        notFound.set(true);
+                                        return file;
                                     } catch (IOException | JsonParseException e2) {
                                         try {
                                             String result = NetworkUtils.doGet(NetworkUtils.toURL(String.format("https://addons-ecs.forgesvc.net/api/v2/addon/%d/file/%d", file.getProjectID(), file.getFileID())));
                                             CurseMetaMod mod = JsonUtils.fromNonNullJson(result, CurseMetaMod.class);
                                             return file.withFileName(mod.getFileName()).withURL(mod.getDownloadURL());
-                                        } catch (IOException | JsonParseException e3) {
-                                            Logging.LOG.log(Level.WARNING, "Could not query cursemeta for deleted mods: " + file.getUrl(), e2);
+                                        } catch (FileNotFoundException fof) {
+                                            Logging.LOG.log(Level.WARNING, "Could not query forgesvc for deleted mods: " + file.getUrl(), fof);
                                             notFound.set(true);
+                                            return file;
+                                        } catch (IOException | JsonParseException e3) {
+                                            Logging.LOG.log(Level.WARNING, "Unable to fetch the file name of URL: " + file.getUrl(), e);
+                                            Logging.LOG.log(Level.WARNING, "Unable to fetch the file name of URL: " + file.getUrl(), e2);
+                                            Logging.LOG.log(Level.WARNING, "Unable to fetch the file name of URL: " + file.getUrl(), e3);
+                                            allNameKnown.set(false);
                                             return file;
                                         }
                                     }
-
-                                } catch (IOException ioe) {
-                                    Logging.LOG.log(Level.WARNING, "Unable to fetch the file name of URL: " + file.getUrl(), ioe);
-                                    flag.set(false);
-                                    return file;
                                 }
-                            } else
+                            } else {
                                 return file;
+                            }
                         })
                         .collect(Collectors.toList()));
         FileUtils.writeText(new File(root, "manifest.json"), JsonUtils.GSON.toJson(newManifest));
@@ -144,21 +155,30 @@ public final class CurseCompletionTask extends Task<Void> {
         for (CurseManifestFile file : newManifest.getFiles())
             if (StringUtils.isNotBlank(file.getFileName())) {
                 if (!modManager.hasSimpleMod(file.getFileName())) {
-                    dependencies.add(new FileDownloadTask(file.getUrl(), modManager.getSimpleModPath(file.getFileName()).toFile())
-                            .setCacheRepository(dependency.getCacheRepository())
-                            .setCaching(true));
+                    FileDownloadTask task = new FileDownloadTask(file.getUrl(), modManager.getSimpleModPath(file.getFileName()).toFile());
+                    task.setCacheRepository(dependency.getCacheRepository());
+                    task.setCaching(true);
+                    dependencies.add(task.withCounter());
                 }
             }
 
-        // Let this task fail if the curse manifest has not been completed.
-        // But continue other downloads.
-        if (!flag.get() || notFound.get())
-            dependencies.add(Task.runAsync(() -> {
-                if (notFound.get())
-                    throw new CurseCompletionException(new FileNotFoundException());
-                else
-                    throw new CurseCompletionException();
-            }));
+        if (!dependencies.isEmpty()) {
+            getProperties().put("total", dependencies.size());
+        }
     }
 
+    @Override
+    public boolean doPostExecute() {
+        return true;
+    }
+
+    @Override
+    public void postExecute() throws Exception {
+        // Let this task fail if the curse manifest has not been completed.
+        // But continue other downloads.
+        if (notFound.get())
+            throw new CurseCompletionException(new FileNotFoundException());
+        if (!allNameKnown.get() || !isDependenciesSucceeded())
+            throw new CurseCompletionException();
+    }
 }

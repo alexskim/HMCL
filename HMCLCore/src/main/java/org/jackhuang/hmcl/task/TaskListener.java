@@ -1,6 +1,6 @@
 /*
  * Hello Minecraft! Launcher
- * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
+ * Copyright (C) 2020  huangyuhui <huanghongxun2008@126.com> and contributors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -18,6 +18,7 @@
 package org.jackhuang.hmcl.task;
 
 import java.util.EventListener;
+import java.util.Map;
 
 /**
  *
@@ -77,5 +78,8 @@ public abstract class TaskListener implements EventListener {
      * @param executor the task executor with responsibility to the task execution.
      */
     public void onStop(boolean success, TaskExecutor executor) {
+    }
+
+    public void onPropertiesUpdate(Map<String, Map<String, Object>> stageProperties) {
     }
 }

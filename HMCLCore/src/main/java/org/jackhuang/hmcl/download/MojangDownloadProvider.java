@@ -1,6 +1,6 @@
 /*
  * Hello Minecraft! Launcher
- * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
+ * Copyright (C) 2020  huangyuhui <huanghongxun2008@126.com> and contributors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -28,6 +28,21 @@ import org.jackhuang.hmcl.download.optifine.OptiFineBMCLVersionList;
  * @author huangyuhui
  */
 public class MojangDownloadProvider implements DownloadProvider {
+    private final GameVersionList game;
+    private final FabricVersionList fabric;
+    private final ForgeBMCLVersionList forge;
+    private final LiteLoaderVersionList liteLoader;
+    private final OptiFineBMCLVersionList optifine;
+
+    public MojangDownloadProvider() {
+        String apiRoot = "https://bmclapi2.bangbang93.com";
+
+        this.game = new GameVersionList(this);
+        this.fabric = new FabricVersionList(this);
+        this.forge = new ForgeBMCLVersionList(apiRoot);
+        this.liteLoader = new LiteLoaderVersionList(this);
+        this.optifine = new OptiFineBMCLVersionList(apiRoot);
+    }
 
     @Override
     public String getVersionListURL() {
@@ -43,15 +58,15 @@ public class MojangDownloadProvider implements DownloadProvider {
     public VersionList<?> getVersionListById(String id) {
         switch (id) {
             case "game":
-                return GameVersionList.INSTANCE;
+                return game;
             case "fabric":
-                return FabricVersionList.INSTANCE;
+                return fabric;
             case "forge":
-                return ForgeBMCLVersionList.INSTANCE;
+                return forge;
             case "liteloader":
-                return LiteLoaderVersionList.INSTANCE;
+                return liteLoader;
             case "optifine":
-                return OptiFineBMCLVersionList.INSTANCE;
+                return optifine;
             default:
                 throw new IllegalArgumentException("Unrecognized version list id: " + id);
         }
@@ -59,7 +74,11 @@ public class MojangDownloadProvider implements DownloadProvider {
 
     @Override
     public String injectURL(String baseURL) {
-        return baseURL
-                .replaceFirst("https?://files\\.minecraftforge\\.net/maven", "https://bmclapi2.bangbang93.com/maven");
+        return baseURL;
+    }
+
+    @Override
+    public int getConcurrency() {
+        return 6;
     }
 }

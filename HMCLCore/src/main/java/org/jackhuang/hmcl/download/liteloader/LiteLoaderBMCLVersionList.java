@@ -1,6 +1,6 @@
 /*
  * Hello Minecraft! Launcher
- * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
+ * Copyright (C) 2020  huangyuhui <huanghongxun2008@126.com> and contributors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,7 +17,7 @@
  */
 package org.jackhuang.hmcl.download.liteloader;
 
-import org.jackhuang.hmcl.download.DownloadProvider;
+import org.jackhuang.hmcl.download.BMCLAPIDownloadProvider;
 import org.jackhuang.hmcl.download.VersionList;
 import org.jackhuang.hmcl.task.GetTask;
 import org.jackhuang.hmcl.task.Task;
@@ -39,10 +39,10 @@ import java.util.Map;
  * @author huangyuhui
  */
 public final class LiteLoaderBMCLVersionList extends VersionList<LiteLoaderRemoteVersion> {
+    private final BMCLAPIDownloadProvider downloadProvider;
 
-    public static final LiteLoaderBMCLVersionList INSTANCE = new LiteLoaderBMCLVersionList();
-
-    private LiteLoaderBMCLVersionList() {
+    public LiteLoaderBMCLVersionList(BMCLAPIDownloadProvider downloadProvider) {
+        this.downloadProvider = downloadProvider;
     }
 
     @Override
@@ -51,7 +51,7 @@ public final class LiteLoaderBMCLVersionList extends VersionList<LiteLoaderRemot
     }
 
     @Override
-    public Task<?> refreshAsync(DownloadProvider downloadProvider) {
+    public Task<?> refreshAsync() {
         GetTask task = new GetTask(NetworkUtils.toURL(downloadProvider.injectURL(LITELOADER_LIST)));
         return new Task<Void>() {
             @Override
@@ -91,7 +91,7 @@ public final class LiteLoaderBMCLVersionList extends VersionList<LiteLoaderRemot
                         continue;
 
                     String version = v.getVersion();
-                    String url = "http://bmclapi2.bangbang93.com/liteloader/download?version=" + version;
+                    String url = "https://bmclapi2.bangbang93.com/liteloader/download?version=" + version;
                     if (snapshot) {
                         try {
                             version = version.replace("SNAPSHOT", getLatestSnapshotVersion(repository.getUrl() + "com/mumfrey/liteloader/" + v.getVersion() + "/"));
@@ -101,7 +101,7 @@ public final class LiteLoaderBMCLVersionList extends VersionList<LiteLoaderRemot
                     }
 
                     versions.put(key, new LiteLoaderRemoteVersion(gameVersion,
-                            version, downloadProvider.injectURL(url),
+                            version, Collections.singletonList(url),
                             v.getTweakClass(), v.getLibraries()
                     ));
                 }

@@ -1,6 +1,6 @@
 /*
  * Hello Minecraft! Launcher
- * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
+ * Copyright (C) 2020  huangyuhui <huanghongxun2008@126.com> and contributors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -46,7 +46,7 @@ public interface DependencyManager {
      *
      * @return the task to check game completion.
      */
-    Task<?> checkGameCompletionAsync(Version version);
+    Task<?> checkGameCompletionAsync(Version version, boolean integrityCheck);
 
     /**
      * Check if the game is complete.
@@ -54,7 +54,17 @@ public interface DependencyManager {
      *
      * @return the task to check game completion.
      */
-    Task<?> checkLibraryCompletionAsync(Version version);
+    Task<?> checkLibraryCompletionAsync(Version version, boolean integrityCheck);
+
+    /**
+     * Check if patches of this version in complete.
+     * If not, reinstall the patch if possible.
+     *
+     * @param version the version to be checked
+     * @param integrityCheck check if some libraries are corrupt.
+     * @return the task to check patches completion.
+     */
+    Task<?> checkPatchCompletionAsync(Version version, boolean integrityCheck);
 
     /**
      * The builder to build a brand new game then libraries such as Forge, LiteLoader and OptiFine.

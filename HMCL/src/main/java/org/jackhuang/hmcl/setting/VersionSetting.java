@@ -1,6 +1,6 @@
 /*
  * Hello Minecraft! Launcher
- * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
+ * Copyright (C) 2020  huangyuhui <huanghongxun2008@126.com> and contributors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -22,6 +22,7 @@ import com.google.gson.annotations.JsonAdapter;
 import javafx.beans.InvalidationListener;
 import javafx.beans.property.*;
 import org.jackhuang.hmcl.Metadata;
+import org.jackhuang.hmcl.game.GameDirectoryType;
 import org.jackhuang.hmcl.game.LaunchOptions;
 import org.jackhuang.hmcl.util.Lang;
 import org.jackhuang.hmcl.util.StringUtils;
@@ -45,7 +46,7 @@ import static org.jackhuang.hmcl.setting.ConfigHolder.config;
  * @author huangyuhui
  */
 @JsonAdapter(VersionSetting.Serializer.class)
-public final class VersionSetting {
+public final class VersionSetting implements Cloneable {
 
     public transient String id;
 
@@ -416,17 +417,17 @@ public final class VersionSetting {
      * 0 - .minecraft<br/>
      * 1 - .minecraft/versions/&lt;version&gt;/<br/>
      */
-    private final ObjectProperty<EnumGameDirectory> gameDirTypeProperty = new SimpleObjectProperty<>(this, "gameDirType", EnumGameDirectory.ROOT_FOLDER);
+    private final ObjectProperty<GameDirectoryType> gameDirTypeProperty = new SimpleObjectProperty<>(this, "gameDirType", GameDirectoryType.ROOT_FOLDER);
 
-    public ObjectProperty<EnumGameDirectory> gameDirTypeProperty() {
+    public ObjectProperty<GameDirectoryType> gameDirTypeProperty() {
         return gameDirTypeProperty;
     }
 
-    public EnumGameDirectory getGameDirType() {
+    public GameDirectoryType getGameDirType() {
         return gameDirTypeProperty.get();
     }
 
-    public void setGameDirType(EnumGameDirectory gameDirType) {
+    public void setGameDirType(GameDirectoryType gameDirType) {
         gameDirTypeProperty.set(gameDirType);
     }
 
@@ -563,6 +564,34 @@ public final class VersionSetting {
         return builder.create();
     }
 
+    @Override
+    public VersionSetting clone() {
+        VersionSetting versionSetting = new VersionSetting();
+        versionSetting.setUsesGlobal(isUsesGlobal());
+        versionSetting.setJava(getJava());
+        versionSetting.setDefaultJavaPath(getDefaultJavaPath());
+        versionSetting.setJavaDir(getJavaDir());
+        versionSetting.setWrapper(getWrapper());
+        versionSetting.setPermSize(getPermSize());
+        versionSetting.setMaxMemory(getMaxMemory());
+        versionSetting.setMinMemory(getMinMemory());
+        versionSetting.setPreLaunchCommand(getPreLaunchCommand());
+        versionSetting.setJavaArgs(getJavaArgs());
+        versionSetting.setMinecraftArgs(getMinecraftArgs());
+        versionSetting.setNoJVMArgs(isNoJVMArgs());
+        versionSetting.setNotCheckGame(isNotCheckGame());
+        versionSetting.setNotCheckJVM(isNotCheckJVM());
+        versionSetting.setShowLogs(isShowLogs());
+        versionSetting.setServerIp(getServerIp());
+        versionSetting.setFullscreen(isFullscreen());
+        versionSetting.setWidth(getWidth());
+        versionSetting.setHeight(getHeight());
+        versionSetting.setGameDirType(getGameDirType());
+        versionSetting.setGameDir(getGameDir());
+        versionSetting.setLauncherVisibility(getLauncherVisibility());
+        return versionSetting;
+    }
+
     public static class Serializer implements JsonSerializer<VersionSetting>, JsonDeserializer<VersionSetting> {
         @Override
         public JsonElement serialize(VersionSetting src, Type typeOfSrc, JsonSerializationContext context) {
@@ -626,7 +655,7 @@ public final class VersionSetting {
             vs.setNotCheckJVM(Optional.ofNullable(obj.get("notCheckJVM")).map(JsonElement::getAsBoolean).orElse(false));
             vs.setShowLogs(Optional.ofNullable(obj.get("showLogs")).map(JsonElement::getAsBoolean).orElse(false));
             vs.setLauncherVisibility(LauncherVisibility.values()[Optional.ofNullable(obj.get("launcherVisibility")).map(JsonElement::getAsInt).orElse(1)]);
-            vs.setGameDirType(EnumGameDirectory.values()[Optional.ofNullable(obj.get("gameDirType")).map(JsonElement::getAsInt).orElse(0)]);
+            vs.setGameDirType(GameDirectoryType.values()[Optional.ofNullable(obj.get("gameDirType")).map(JsonElement::getAsInt).orElse(0)]);
             vs.setDefaultJavaPath(Optional.ofNullable(obj.get("defaultJavaPath")).map(JsonElement::getAsString).orElse(null));
 
             return vs;

@@ -1,6 +1,6 @@
 /*
  * Hello Minecraft! Launcher
- * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
+ * Copyright (C) 2020  huangyuhui <huanghongxun2008@126.com> and contributors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -44,12 +44,13 @@ public abstract class ToolbarListPageSkin<T extends ListPageBase<? extends Node>
 
         BorderPane root = new BorderPane();
 
-        {
+        List<Node> toolbarButtons = initializeToolbar(skinnable);
+        if (!toolbarButtons.isEmpty()) {
             HBox toolbar = new HBox();
             toolbar.getStyleClass().add("jfx-tool-bar-second");
             JFXDepthManager.setDepth(toolbar, 1);
             toolbar.setPickOnBounds(false);
-            toolbar.getChildren().setAll(initializeToolbar(skinnable));
+            toolbar.getChildren().setAll(toolbarButtons);
             root.setTop(toolbar);
         }
 
@@ -88,6 +89,16 @@ public abstract class ToolbarListPageSkin<T extends ListPageBase<? extends Node>
         ret.textFillProperty().bind(Theme.foregroundFillBinding());
         ret.setGraphic(wrap(creator.createIcon(Theme.foregroundFillBinding(), -1, -1)));
         ret.setText(text);
+        ret.setOnMouseClicked(e -> onClick.run());
+        return ret;
+    }
+
+    public static JFXButton createDecoratorButton(String tooltip, SVG.SVGIcon creator, Runnable onClick) {
+        JFXButton ret = new JFXButton();
+        ret.getStyleClass().add("jfx-decorator-button");
+        ret.textFillProperty().bind(Theme.foregroundFillBinding());
+        ret.setGraphic(wrap(creator.createIcon(Theme.foregroundFillBinding(), -1, -1)));
+        FXUtils.installFastTooltip(ret, tooltip);
         ret.setOnMouseClicked(e -> onClick.run());
         return ret;
     }

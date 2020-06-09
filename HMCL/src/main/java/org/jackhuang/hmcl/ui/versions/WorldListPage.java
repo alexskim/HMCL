@@ -1,6 +1,6 @@
 /*
  * Hello Minecraft! Launcher
- * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
+ * Copyright (C) 2020  huangyuhui <huanghongxun2008@126.com> and contributors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -18,6 +18,7 @@
 package org.jackhuang.hmcl.ui.versions;
 
 import com.jfoenix.controls.JFXCheckBox;
+import javafx.application.Platform;
 import javafx.beans.property.BooleanProperty;
 import javafx.beans.property.SimpleBooleanProperty;
 import javafx.scene.Node;
@@ -39,8 +40,10 @@ import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 import java.util.logging.Level;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static org.jackhuang.hmcl.util.i18n.I18n.i18n;
 
@@ -67,33 +70,37 @@ public class WorldListPage extends ListPageBase<WorldListItem> {
     }
 
     @Override
-    protected ToolbarListPageSkin createDefaultSkin() {
+    protected ToolbarListPageSkin<WorldListPage> createDefaultSkin() {
         return new WorldListPageSkin();
     }
 
-    public void loadVersion(Profile profile, String id) {
+    public CompletableFuture<?> loadVersion(Profile profile, String id) {
         this.profile = profile;
         this.id = id;
         this.savesDir = profile.getRepository().getRunDirectory(id).toPath().resolve("saves");
-        refresh();
+        return refresh();
     }
 
-    public void refresh() {
+    public CompletableFuture<?> refresh() {
         if (profile == null || id == null)
-            return;
+            return CompletableFuture.completedFuture(null);
 
         setLoading(true);
-        Task
+        return CompletableFuture
                 .runAsync(() -> gameVersion = GameVersion.minecraftVersion(profile.getRepository().getVersionJar(id)).orElse(null))
-                .thenSupplyAsync(() -> World.getWorlds(savesDir).parallel().collect(Collectors.toList()))
-                .whenComplete(Schedulers.javafx(), (result, exception) -> {
+                .thenApplyAsync(unused -> {
+                    try (Stream<World> stream = World.getWorlds(savesDir)) {
+                        return stream.parallel().collect(Collectors.toList());
+                    }
+                })
+                .whenCompleteAsync((result, exception) -> {
                     worlds = result;
                     setLoading(false);
                     if (exception == null)
                         itemsProperty().setAll(result.stream()
                                 .filter(world -> isShowAll() || world.getGameVersion() == null || world.getGameVersion().equals(gameVersion))
                                 .map(WorldListItem::new).collect(Collectors.toList()));
-                }).start();
+                }, Platform::runLater);
     }
 
     public void add() {
@@ -111,7 +118,7 @@ public class WorldListPage extends ListPageBase<WorldListItem> {
         // Or too many input dialogs are popped.
         Task.supplyAsync(() -> new World(zipFile.toPath()))
                 .whenComplete(Schedulers.javafx(), world -> {
-                    Controllers.inputDialog(i18n("world.name.enter"), (name, resolve, reject) -> {
+                    Controllers.prompt(i18n("world.name.enter"), (name, resolve, reject) -> {
                         Task.runAsync(() -> world.install(savesDir, name))
                                 .whenComplete(Schedulers.javafx(), () -> {
                                     itemsProperty().add(new WorldListItem(new World(savesDir.resolve(name))));
@@ -124,7 +131,7 @@ public class WorldListPage extends ListPageBase<WorldListItem> {
                                     else
                                         reject.accept(i18n("world.import.failed", e.getClass().getName() + ": " + e.getLocalizedMessage()));
                                 }).start();
-                    }).setInitialText(world.getWorldName());
+                    }, world.getWorldName());
                 }, e -> {
                     Logging.LOG.log(Level.WARNING, "Unable to parse world file " + zipFile, e);
                     Controllers.dialog(i18n("world.import.invalid"));

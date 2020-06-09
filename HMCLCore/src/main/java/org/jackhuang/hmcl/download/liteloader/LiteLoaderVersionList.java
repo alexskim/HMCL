@@ -1,6 +1,6 @@
 /*
  * Hello Minecraft! Launcher
- * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
+ * Copyright (C) 2020  huangyuhui <huanghongxun2008@126.com> and contributors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -40,9 +40,10 @@ import java.util.Map;
  */
 public final class LiteLoaderVersionList extends VersionList<LiteLoaderRemoteVersion> {
 
-    public static final LiteLoaderVersionList INSTANCE = new LiteLoaderVersionList();
+    private final DownloadProvider downloadProvider;
 
-    private LiteLoaderVersionList() {
+    public LiteLoaderVersionList(DownloadProvider downloadProvider) {
+        this.downloadProvider = downloadProvider;
     }
 
     @Override
@@ -51,7 +52,7 @@ public final class LiteLoaderVersionList extends VersionList<LiteLoaderRemoteVer
     }
 
     @Override
-    public Task<?> refreshAsync(DownloadProvider downloadProvider) {
+    public Task<?> refreshAsync() {
         GetTask task = new GetTask(NetworkUtils.toURL(downloadProvider.injectURL(LITELOADER_LIST)));
         return new Task<Void>() {
             @Override
@@ -101,7 +102,7 @@ public final class LiteLoaderVersionList extends VersionList<LiteLoaderRemoteVer
                     }
 
                     versions.put(key, new LiteLoaderRemoteVersion(gameVersion,
-                            version, downloadProvider.injectURL(url),
+                            version, Collections.singletonList(url),
                             v.getTweakClass(), v.getLibraries()
                     ));
                 }

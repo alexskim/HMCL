@@ -1,6 +1,6 @@
 /*
  * Hello Minecraft! Launcher
- * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
+ * Copyright (C) 2020  huangyuhui <huanghongxun2008@126.com> and contributors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,29 +21,17 @@ import javafx.animation.KeyFrame;
 import javafx.animation.Timeline;
 import javafx.application.Platform;
 import javafx.scene.Node;
-import javafx.scene.Parent;
 import javafx.scene.layout.StackPane;
-import javafx.scene.shape.Rectangle;
 import javafx.util.Duration;
+import org.jackhuang.hmcl.ui.FXUtils;
 
-public final class TransitionHandler implements AnimationHandler {
-    private final StackPane view;
-    private Timeline animation;
+public class TransitionPane extends StackPane implements AnimationHandler {
     private Duration duration;
     private Node previousNode, currentNode;
 
-    /**
-     * @param view A stack pane that contains another control that is {@link Parent}
-     */
-    public TransitionHandler(StackPane view) {
-        this.view = view;
-        currentNode = view.getChildren().stream().findFirst().orElse(null);
-
-        // prevent content overflow
-        Rectangle clip = new Rectangle();
-        clip.widthProperty().bind(view.widthProperty());
-        clip.heightProperty().bind(view.heightProperty());
-        view.setClip(clip);
+    {
+        currentNode = getChildren().stream().findFirst().orElse(null);
+        FXUtils.setOverflowHidden(this);
     }
 
     @Override
@@ -58,7 +46,7 @@ public final class TransitionHandler implements AnimationHandler {
 
     @Override
     public StackPane getCurrentRoot() {
-        return view;
+        return this;
     }
 
     @Override
@@ -67,15 +55,11 @@ public final class TransitionHandler implements AnimationHandler {
     }
 
     public void setContent(Node newView, AnimationProducer transition) {
-        setContent(newView, transition, Duration.millis(320));
+        setContent(newView, transition, Duration.millis(160));
     }
 
     public void setContent(Node newView, AnimationProducer transition, Duration duration) {
         this.duration = duration;
-
-        Timeline prev = animation;
-        if (prev != null)
-            prev.stop();
 
         updateContent(newView);
 
@@ -83,19 +67,18 @@ public final class TransitionHandler implements AnimationHandler {
 
         // runLater or "init" will not work
         Platform.runLater(() -> {
-            Timeline nowAnimation = new Timeline();
-            nowAnimation.getKeyFrames().addAll(transition.animate(this));
-            nowAnimation.getKeyFrames().add(new KeyFrame(duration, e -> {
-                view.setMouseTransparent(false);
-                view.getChildren().remove(previousNode);
+            Timeline newAnimation = new Timeline();
+            newAnimation.getKeyFrames().addAll(transition.animate(this));
+            newAnimation.getKeyFrames().add(new KeyFrame(duration, e -> {
+                setMouseTransparent(false);
+                getChildren().remove(previousNode);
             }));
-            nowAnimation.play();
-            animation = nowAnimation;
+            FXUtils.playAnimation(this, "transition_pane", newAnimation);
         });
     }
 
     private void updateContent(Node newView) {
-        if (view.getWidth() > 0 && view.getHeight() > 0) {
+        if (getWidth() > 0 && getHeight() > 0) {
             previousNode = currentNode;
             if (previousNode == null)
                 previousNode = EMPTY_PANE;
@@ -105,11 +88,11 @@ public final class TransitionHandler implements AnimationHandler {
         if (previousNode == newView)
             previousNode = EMPTY_PANE;
 
-        view.setMouseTransparent(true);
+        setMouseTransparent(true);
 
         currentNode = newView;
 
-        view.getChildren().setAll(previousNode, currentNode);
+        getChildren().setAll(previousNode, currentNode);
     }
 
     private final StackPane EMPTY_PANE = new StackPane();

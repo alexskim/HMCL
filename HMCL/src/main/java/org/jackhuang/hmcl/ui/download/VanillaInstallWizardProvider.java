@@ -1,6 +1,6 @@
 /*
  * Hello Minecraft! Launcher
- * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
+ * Copyright (C) 2020  huangyuhui <huanghongxun2008@126.com> and contributors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -18,9 +18,10 @@
 package org.jackhuang.hmcl.ui.download;
 
 import javafx.scene.Node;
-import org.jackhuang.hmcl.download.DownloadProvider;
+import org.jackhuang.hmcl.download.DefaultDependencyManager;
 import org.jackhuang.hmcl.download.GameBuilder;
 import org.jackhuang.hmcl.download.RemoteVersion;
+import org.jackhuang.hmcl.setting.DownloadProviders;
 import org.jackhuang.hmcl.setting.Profile;
 import org.jackhuang.hmcl.task.Schedulers;
 import org.jackhuang.hmcl.task.Task;
@@ -33,9 +34,13 @@ import static org.jackhuang.hmcl.util.i18n.I18n.i18n;
 
 public final class VanillaInstallWizardProvider implements WizardProvider {
     private final Profile profile;
+    private final DefaultDependencyManager dependencyManager;
+    private final InstallerWizardDownloadProvider downloadProvider;
 
     public VanillaInstallWizardProvider(Profile profile) {
         this.profile = profile;
+        this.downloadProvider = new InstallerWizardDownloadProvider(DownloadProviders.getDownloadProvider());
+        this.dependencyManager = profile.getDependency(downloadProvider);
     }
 
     @Override
@@ -44,7 +49,7 @@ public final class VanillaInstallWizardProvider implements WizardProvider {
     }
 
     private Task<Void> finishVersionDownloadingAsync(Map<String, Object> settings) {
-        GameBuilder builder = profile.getDependency().gameBuilder();
+        GameBuilder builder = dependencyManager.gameBuilder();
 
         String name = (String) settings.get("name");
         builder.name(name);
@@ -60,18 +65,19 @@ public final class VanillaInstallWizardProvider implements WizardProvider {
 
     @Override
     public Object finish(Map<String, Object> settings) {
+        settings.put("title", i18n("install.new_game"));
         settings.put("success_message", i18n("install.success"));
-        settings.put("failure_callback", (FailureCallback) (settings1, exception, next) -> InstallerWizardProvider.alertFailureMessage(exception, next));
+        settings.put("failure_callback", (FailureCallback) (settings1, exception, next) -> UpdateInstallerWizardProvider.alertFailureMessage(exception, next));
 
         return finishVersionDownloadingAsync(settings);
     }
 
     @Override
     public Node createPage(WizardController controller, int step, Map<String, Object> settings) {
-        DownloadProvider provider = profile.getDependency().getDownloadProvider();
         switch (step) {
             case 0:
-                return new VersionsPage(controller, i18n("install.installer.choose", i18n("install.installer.game")), "", provider, "game", () -> controller.onNext(new InstallersPage(controller, profile.getRepository(), provider)));
+                return new VersionsPage(controller, i18n("install.installer.choose", i18n("install.installer.game")), "", downloadProvider, "game",
+                        () -> controller.onNext(new InstallersPage(controller, profile.getRepository(), ((RemoteVersion) controller.getSettings().get("game")).getGameVersion(), downloadProvider)));
             default:
                 throw new IllegalStateException("error step " + step + ", settings: " + settings + ", pages: " + controller.getPages());
         }

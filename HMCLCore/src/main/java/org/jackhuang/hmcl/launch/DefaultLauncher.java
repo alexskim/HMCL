@@ -1,6 +1,6 @@
 /*
  * Hello Minecraft! Launcher
- * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
+ * Copyright (C) 2020  huangyuhui <huanghongxun2008@126.com> and contributors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -153,6 +153,7 @@ public class DefaultLauncher extends Launcher {
         configuration.put("${natives_directory}", nativeFolder.getAbsolutePath());
         configuration.put("${game_assets}", gameAssets.getAbsolutePath());
         configuration.put("${assets_root}", gameAssets.getAbsolutePath());
+        configuration.put("${libraries_directory}", repository.getLibrariesDirectory(version).getAbsolutePath());
 
         res.addAll(Arguments.parseArguments(version.getArguments().map(Arguments::getJvm).orElseGet(this::getDefaultJVMArguments), configuration));
         if (authInfo.getArguments() != null && authInfo.getArguments().getJvm() != null && !authInfo.getArguments().getJvm().isEmpty())
@@ -163,7 +164,10 @@ public class DefaultLauncher extends Launcher {
         res.addAll(Arguments.parseStringArguments(version.getMinecraftArguments().map(StringUtils::tokenize).orElseGet(LinkedList::new), configuration));
 
         Map<String, Boolean> features = getFeatures();
-        res.addAll(Arguments.parseArguments(version.getArguments().map(Arguments::getGame).orElseGet(this::getDefaultGameArguments), configuration, features));
+        version.getArguments().map(Arguments::getGame).ifPresent(arguments -> res.addAll(Arguments.parseArguments(arguments, configuration, features)));
+        if (version.getMinecraftArguments().isPresent()) {
+            res.addAll(Arguments.parseArguments(this.getDefaultGameArguments(), configuration, features));
+        }
         if (authInfo.getArguments() != null && authInfo.getArguments().getGame() != null && !authInfo.getArguments().getGame().isEmpty())
             res.addAll(Arguments.parseArguments(authInfo.getArguments().getGame(), configuration, features));
 
@@ -280,9 +284,18 @@ public class DefaultLauncher extends Launcher {
 
         File runDirectory = repository.getRunDirectory(version.getId());
 
-        if (StringUtils.isNotBlank(options.getPreLaunchCommand()))
-            new ProcessBuilder(options.getPreLaunchCommand())
+        if (StringUtils.isNotBlank(options.getPreLaunchCommand())) {
+            String versionName = Optional.ofNullable(options.getVersionName()).orElse(version.getId());
+            String preLaunchCommand = options.getPreLaunchCommand()
+                    .replace("$INST_NAME", versionName)
+                    .replace("$INST_ID", versionName)
+                    .replace("$INST_DIR", repository.getVersionRoot(version.getId()).getAbsolutePath())
+                    .replace("$INST_MC_DIR", repository.getRunDirectory(version.getId()).getAbsolutePath())
+                    .replace("$INST_JAVA", options.getJava().getBinary().toString());
+
+            new ProcessBuilder(StringUtils.tokenize(preLaunchCommand))
                     .directory(runDirectory).start().waitFor();
+        }
 
         Process process;
         try {
@@ -336,12 +349,12 @@ public class DefaultLauncher extends Launcher {
     private void startMonitors(ManagedProcess managedProcess, ProcessListener processListener, boolean isDaemon) {
         processListener.setProcess(managedProcess);
         Thread stdout = Lang.thread(new StreamPump(managedProcess.getProcess().getInputStream(), it -> {
-            processListener.onLog(it + OperatingSystem.LINE_SEPARATOR, Optional.ofNullable(Log4jLevel.guessLevel(it)).orElse(Log4jLevel.INFO));
+            processListener.onLog(it, Optional.ofNullable(Log4jLevel.guessLevel(it)).orElse(Log4jLevel.INFO));
             managedProcess.addLine(it);
         }), "stdout-pump", isDaemon);
         managedProcess.addRelatedThread(stdout);
         Thread stderr = Lang.thread(new StreamPump(managedProcess.getProcess().getErrorStream(), it -> {
-            processListener.onLog(it + OperatingSystem.LINE_SEPARATOR, Log4jLevel.ERROR);
+            processListener.onLog(it, Log4jLevel.ERROR);
             managedProcess.addLine(it);
         }), "stderr-pump", isDaemon);
         managedProcess.addRelatedThread(stderr);

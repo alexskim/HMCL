@@ -1,6 +1,6 @@
 /*
  * Hello Minecraft! Launcher
- * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
+ * Copyright (C) 2020  huangyuhui <huanghongxun2008@126.com> and contributors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -35,6 +35,8 @@ import java.io.File;
 import java.io.IOException;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 public final class HMCLModpackInstallTask extends Task<Void> {
     private final File zipFile;
@@ -75,6 +77,7 @@ public final class HMCLModpackInstallTask extends Task<Void> {
         } catch (JsonParseException | IOException ignore) {
         }
         dependents.add(new ModpackInstallTask<>(zipFile, run, modpack.getEncoding(), "/minecraft", it -> !"pack.json".equals(it), config));
+        dependents.add(new MinecraftInstanceTask<>(zipFile, modpack.getEncoding(), "/minecraft", modpack, MODPACK_TYPE, repository.getModpackConfiguration(name)).withStage("hmcl.modpack"));
     }
 
     @Override
@@ -101,8 +104,15 @@ public final class HMCLModpackInstallTask extends Task<Void> {
             libraryTask = libraryTask.thenComposeAsync(version -> dependency.installLibraryAsync(modpack.getGameVersion(), version, mark.getLibraryId(), mark.getLibraryVersion()));
         }
 
-        dependencies.add(libraryTask.thenComposeAsync(repository::save));
-        dependencies.add(new MinecraftInstanceTask<>(zipFile, modpack.getEncoding(), "/minecraft", modpack, MODPACK_TYPE, repository.getModpackConfiguration(name)));
+        dependencies.add(libraryTask.thenComposeAsync(repository::saveAsync));
+    }
+
+    @Override
+    public List<String> getStages() {
+        return Stream.concat(
+                dependents.stream().flatMap(task -> task.getStages().stream()),
+                Stream.of("hmcl.modpack")
+        ).collect(Collectors.toList());
     }
 
     public static final String MODPACK_TYPE = "HMCL";

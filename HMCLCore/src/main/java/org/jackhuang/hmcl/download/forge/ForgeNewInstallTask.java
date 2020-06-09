@@ -1,6 +1,6 @@
 /*
  * Hello Minecraft! Launcher
- * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
+ * Copyright (C) 2020  huangyuhui <huanghongxun2008@126.com> and contributors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,10 +17,10 @@
  */
 package org.jackhuang.hmcl.download.forge;
 
+import org.jackhuang.hmcl.download.ArtifactMalformedException;
 import org.jackhuang.hmcl.download.DefaultDependencyManager;
 import org.jackhuang.hmcl.download.LibraryAnalyzer;
 import org.jackhuang.hmcl.download.game.GameLibrariesTask;
-import org.jackhuang.hmcl.download.optifine.OptiFineInstallTask;
 import org.jackhuang.hmcl.game.Artifact;
 import org.jackhuang.hmcl.game.DefaultGameRepository;
 import org.jackhuang.hmcl.game.Library;
@@ -44,17 +44,10 @@ import java.nio.file.FileSystem;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
+import java.util.*;
 import java.util.jar.Attributes;
 import java.util.jar.JarFile;
-import java.util.stream.Collectors;
+import java.util.zip.ZipException;
 
 import static org.jackhuang.hmcl.util.DigestUtils.digest;
 import static org.jackhuang.hmcl.util.Hex.encodeHex;
@@ -132,14 +125,11 @@ public class ForgeNewInstallTask extends Task<Version> {
             }
         }
 
-        dependents.add(new GameLibrariesTask(dependencyManager, version, profile.getLibraries()));
+        dependents.add(new GameLibrariesTask(dependencyManager, version, true, profile.getLibraries()));
     }
 
     @Override
     public void execute() throws Exception {
-        if ("net.minecraft.launchwrapper.Launch".equals(version.resolve(dependencyManager.getGameRepository()).getMainClass()))
-            throw new OptiFineInstallTask.UnsupportedOptiFineInstallationException();
-
         Path temp  = Files.createTempDirectory("forge_installer");
         int finished = 0;
         try (FileSystem fs = CompressingUtils.createReadOnlyZipFileSystem(installer)) {
@@ -176,7 +166,7 @@ public class ForgeNewInstallTask extends Task<Version> {
                     value = parseLiteral(value, data, ExceptionalFunction.identity());
 
                     if (key == null || value == null) {
-                        throw new Exception("Invalid forge installation configuration");
+                        throw new ArtifactMalformedException("Invalid forge installation configuration");
                     }
 
                     outputs.put(key, value);
@@ -235,7 +225,7 @@ public class ForgeNewInstallTask extends Task<Version> {
                 for (String arg : processor.getArgs()) {
                     String parsed = parseLiteral(arg, data, ExceptionalFunction.identity());
                     if (parsed == null)
-                        throw new IOException("Invalid forge installation configuration");
+                        throw new ArtifactMalformedException("Invalid forge installation configuration");
                     args.add(parsed);
                 }
 
@@ -264,13 +254,15 @@ public class ForgeNewInstallTask extends Task<Version> {
 
                 updateProgress(++finished, processors.size());
             }
+        } catch (ZipException ex) {
+            throw new ArtifactMalformedException("Malformed forge installer file", ex);
         }
 
         setResult(forgeVersion
                 .setPriority(30000)
                 .setId(LibraryAnalyzer.LibraryType.FORGE.getPatchId())
                 .setVersion(selfVersion));
-        dependencies.add(dependencyManager.checkLibraryCompletionAsync(forgeVersion));
+        dependencies.add(dependencyManager.checkLibraryCompletionAsync(forgeVersion, true));
 
         FileUtils.deleteDirectory(temp.toFile());
     }

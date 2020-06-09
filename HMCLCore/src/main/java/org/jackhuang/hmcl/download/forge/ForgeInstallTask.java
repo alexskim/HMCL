@@ -1,6 +1,6 @@
 /*
  * Hello Minecraft! Launcher
- * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
+ * Copyright (C) 2020  huangyuhui <huanghongxun2008@126.com> and contributors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -18,7 +18,10 @@
 package org.jackhuang.hmcl.download.forge;
 
 import org.jackhuang.hmcl.download.DefaultDependencyManager;
+import org.jackhuang.hmcl.download.DependencyManager;
+import org.jackhuang.hmcl.download.LibraryAnalyzer;
 import org.jackhuang.hmcl.download.VersionMismatchException;
+import org.jackhuang.hmcl.download.optifine.OptiFineInstallTask;
 import org.jackhuang.hmcl.game.GameVersion;
 import org.jackhuang.hmcl.game.Version;
 import org.jackhuang.hmcl.task.FileDownloadTask;
@@ -26,15 +29,16 @@ import org.jackhuang.hmcl.task.Task;
 import org.jackhuang.hmcl.util.gson.JsonUtils;
 import org.jackhuang.hmcl.util.io.CompressingUtils;
 import org.jackhuang.hmcl.util.io.FileUtils;
-import org.jackhuang.hmcl.util.io.NetworkUtils;
 import org.jackhuang.hmcl.util.versioning.VersionNumber;
 
 import java.io.IOException;
 import java.nio.file.FileSystem;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.*;
-import java.util.stream.Collectors;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.Map;
+import java.util.Optional;
 
 import static org.jackhuang.hmcl.util.StringUtils.removePrefix;
 import static org.jackhuang.hmcl.util.StringUtils.removeSuffix;
@@ -49,7 +53,7 @@ public final class ForgeInstallTask extends Task<Version> {
     private final Version version;
     private Path installer;
     private final ForgeRemoteVersion remote;
-    private Task<Void> dependent;
+    private FileDownloadTask dependent;
     private Task<Version> dependency;
 
     public ForgeInstallTask(DefaultDependencyManager dependencyManager, Version version, ForgeRemoteVersion remoteVersion) {
@@ -68,12 +72,11 @@ public final class ForgeInstallTask extends Task<Version> {
         installer = Files.createTempFile("forge-installer", ".jar");
 
         dependent = new FileDownloadTask(
-                Arrays.stream(remote.getUrl())
-                        .map(NetworkUtils::toURL)
-                        .collect(Collectors.toList()),
-                installer.toFile(), null)
-                .setCacheRepository(dependencyManager.getCacheRepository())
-                .setCaching(true);
+                dependencyManager.getDownloadProvider().injectURLsWithCandidates(remote.getUrls()),
+                installer.toFile(), null);
+        dependent.setCacheRepository(dependencyManager.getCacheRepository());
+        dependent.setCaching(true);
+        dependent.addIntegrityCheckHandler(FileDownloadTask.ZIP_INTEGRITY_CHECK_HANDLER);
     }
 
     @Override
@@ -98,11 +101,55 @@ public final class ForgeInstallTask extends Task<Version> {
     }
 
     @Override
-    public void execute() {
-        if (VersionNumber.VERSION_COMPARATOR.compare("1.13", remote.getGameVersion()) <= 0)
+    public void execute() throws IOException, VersionMismatchException, OptiFineInstallTask.UnsupportedOptiFineInstallationException {
+        String originalMainClass = version.resolve(dependencyManager.getGameRepository()).getMainClass();
+        if (VersionNumber.VERSION_COMPARATOR.compare("1.13", remote.getGameVersion()) <= 0) {
+            // Forge 1.13 is not compatible with fabric.
+            if (!LibraryAnalyzer.VANILLA_MAIN.equals(originalMainClass) && !LibraryAnalyzer.MOD_LAUNCHER_MAIN.equals(originalMainClass) && !LibraryAnalyzer.LAUNCH_WRAPPER_MAIN.equals(originalMainClass))
+                throw new OptiFineInstallTask.UnsupportedOptiFineInstallationException();
+        } else {
+            // Forge 1.12 and older versions is compatible with vanilla and launchwrapper.
+            // if (!"net.minecraft.client.main.Main".equals(originalMainClass) && !"net.minecraft.launchwrapper.Launch".equals(originalMainClass))
+            //     throw new OptiFineInstallTask.UnsupportedOptiFineInstallationException();
+        }
+
+
+        if (detectForgeInstallerType(dependencyManager, version, installer))
             dependency = new ForgeNewInstallTask(dependencyManager, version, remote.getSelfVersion(), installer);
         else
             dependency = new ForgeOldInstallTask(dependencyManager, version, remote.getSelfVersion(), installer);
+    }
+
+    /**
+     * Detect Forge installer type.
+     *
+     * @param dependencyManager game repository
+     * @param version version.json
+     * @param installer the Forge installer, either the new or old one.
+     * @return true for new, false for old
+     * @throws IOException if unable to read compressed content of installer file, or installer file is corrupted, or the installer is not the one we want.
+     * @throws VersionMismatchException if required game version of installer does not match the actual one.
+     */
+    public static boolean detectForgeInstallerType(DependencyManager dependencyManager, Version version, Path installer) throws IOException, VersionMismatchException {
+        Optional<String> gameVersion = GameVersion.minecraftVersion(dependencyManager.getGameRepository().getVersionJar(version));
+        if (!gameVersion.isPresent()) throw new IOException();
+        try (FileSystem fs = CompressingUtils.createReadOnlyZipFileSystem(installer)) {
+            String installProfileText = FileUtils.readText(fs.getPath("install_profile.json"));
+            Map<?, ?> installProfile = JsonUtils.fromNonNullJson(installProfileText, Map.class);
+            if (installProfile.containsKey("spec")) {
+                ForgeNewInstallProfile profile = JsonUtils.fromNonNullJson(installProfileText, ForgeNewInstallProfile.class);
+                if (!gameVersion.get().equals(profile.getMinecraft()))
+                    throw new VersionMismatchException(profile.getMinecraft(), gameVersion.get());
+                return true;
+            } else if (installProfile.containsKey("install") && installProfile.containsKey("versionInfo")) {
+                ForgeInstallProfile profile = JsonUtils.fromNonNullJson(installProfileText, ForgeInstallProfile.class);
+                if (!gameVersion.get().equals(profile.getInstall().getMinecraft()))
+                    throw new VersionMismatchException(profile.getInstall().getMinecraft(), gameVersion.get());
+                return false;
+            } else {
+                throw new IOException();
+            }
+        }
     }
 
     /**
@@ -121,7 +168,7 @@ public final class ForgeInstallTask extends Task<Version> {
         if (!gameVersion.isPresent()) throw new IOException();
         try (FileSystem fs = CompressingUtils.createReadOnlyZipFileSystem(installer)) {
             String installProfileText = FileUtils.readText(fs.getPath("install_profile.json"));
-            Map installProfile = JsonUtils.fromNonNullJson(installProfileText, Map.class);
+            Map<?, ?> installProfile = JsonUtils.fromNonNullJson(installProfileText, Map.class);
             if (installProfile.containsKey("spec")) {
                 ForgeNewInstallProfile profile = JsonUtils.fromNonNullJson(installProfileText, ForgeNewInstallProfile.class);
                 if (!gameVersion.get().equals(profile.getMinecraft()))

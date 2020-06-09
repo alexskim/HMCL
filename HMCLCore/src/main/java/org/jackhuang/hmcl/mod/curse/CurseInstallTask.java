@@ -1,6 +1,6 @@
 /*
  * Hello Minecraft! Launcher
- * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
+ * Copyright (C) 2020  huangyuhui <huanghongxun2008@126.com> and contributors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -32,11 +32,12 @@ import org.jackhuang.hmcl.util.gson.JsonUtils;
 import org.jackhuang.hmcl.util.io.FileUtils;
 
 import java.io.File;
-import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.util.Collection;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * Install a downloaded CurseForge modpack.
@@ -87,7 +88,7 @@ public final class CurseInstallTask extends Task<Void> {
         onDone().register(event -> {
             Exception ex = event.getTask().getException();
             if (event.isFailed()) {
-                if (!(ex instanceof CurseCompletionException) || ex.getCause() instanceof FileNotFoundException) {
+                if (!(ex instanceof CurseCompletionException)) {
                     repository.removeVersionFromDisk(name);
                 }
             }
@@ -105,7 +106,10 @@ public final class CurseInstallTask extends Task<Void> {
         } catch (JsonParseException | IOException ignore) {
         }
         this.config = config;
-        dependents.add(new ModpackInstallTask<>(zipFile, run, modpack.getEncoding(), manifest.getOverrides(), any -> true, config));
+        dependents.add(new ModpackInstallTask<>(zipFile, run, modpack.getEncoding(), manifest.getOverrides(), any -> true, config).withStage("hmcl.modpack"));
+        dependents.add(new MinecraftInstanceTask<>(zipFile, modpack.getEncoding(), manifest.getOverrides(), manifest, MODPACK_TYPE, repository.getModpackConfiguration(name)).withStage("hmcl.modpack"));
+
+        dependencies.add(new CurseCompletionTask(dependencyManager, name, manifest).withStage("hmcl.modpack.download"));
     }
 
     @Override
@@ -120,7 +124,8 @@ public final class CurseInstallTask extends Task<Void> {
 
     @Override
     public void execute() throws Exception {
-        if (config != null)
+        if (config != null) {
+            // For update, remove mods not listed in new manifest
             for (CurseManifestFile oldCurseManifestFile : config.getManifest().getFiles()) {
                 if (StringUtils.isBlank(oldCurseManifestFile.getFileName())) continue;
                 File oldFile = new File(run, "mods/" + oldCurseManifestFile.getFileName());
@@ -129,12 +134,18 @@ public final class CurseInstallTask extends Task<Void> {
                     if (!oldFile.delete())
                         throw new IOException("Unable to delete mod file " + oldFile);
             }
+        }
 
         File root = repository.getVersionRoot(name);
         FileUtils.writeText(new File(root, "manifest.json"), JsonUtils.GSON.toJson(manifest));
+    }
 
-        dependencies.add(new CurseCompletionTask(dependencyManager, name, manifest));
-        dependencies.add(new MinecraftInstanceTask<>(zipFile, modpack.getEncoding(), manifest.getOverrides(), manifest, MODPACK_TYPE, repository.getModpackConfiguration(name)));
+    @Override
+    public List<String> getStages() {
+        return Stream.concat(
+                dependents.stream().flatMap(task -> task.getStages().stream()),
+                Stream.of("hmcl.modpack", "hmcl.modpack.download")
+        ).collect(Collectors.toList());
     }
 
     public static final String MODPACK_TYPE = "Curse";

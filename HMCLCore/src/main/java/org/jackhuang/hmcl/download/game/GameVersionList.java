@@ -1,6 +1,6 @@
 /*
  * Hello Minecraft! Launcher
- * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
+ * Copyright (C) 2020  huangyuhui <huanghongxun2008@126.com> and contributors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -32,10 +32,10 @@ import java.util.Collections;
  * @author huangyuhui
  */
 public final class GameVersionList extends VersionList<GameRemoteVersion> {
+    private final DownloadProvider downloadProvider;
 
-    public static final GameVersionList INSTANCE = new GameVersionList();
-
-    private GameVersionList() {
+    public GameVersionList(DownloadProvider downloadProvider) {
+        this.downloadProvider = downloadProvider;
     }
 
     @Override
@@ -45,16 +45,11 @@ public final class GameVersionList extends VersionList<GameRemoteVersion> {
 
     @Override
     protected Collection<GameRemoteVersion> getVersionsImpl(String gameVersion) {
-        lock.readLock().lock();
-        try {
-            return versions.values();
-        } finally {
-            lock.readLock().unlock();
-        }
+        return versions.values();
     }
 
     @Override
-    public Task<?> refreshAsync(DownloadProvider downloadProvider) {
+    public Task<?> refreshAsync() {
         GetTask task = new GetTask(NetworkUtils.toURL(downloadProvider.getVersionListURL()));
         return new Task<Void>() {
             @Override
@@ -74,7 +69,7 @@ public final class GameVersionList extends VersionList<GameRemoteVersion> {
                         versions.put(remoteVersion.getGameVersion(), new GameRemoteVersion(
                                 remoteVersion.getGameVersion(),
                                 remoteVersion.getGameVersion(),
-                                remoteVersion.getUrl(),
+                                Collections.singletonList(remoteVersion.getUrl()),
                                 remoteVersion.getType(), remoteVersion.getReleaseTime())
                         );
                     }

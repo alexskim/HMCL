@@ -1,6 +1,6 @@
 /*
  * Hello Minecraft! Launcher
- * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
+ * Copyright (C) 2020  huangyuhui <huanghongxun2008@126.com> and contributors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -196,13 +196,18 @@ public final class ExportWizardProvider implements WizardProvider {
             }
         };
     }
-            @Override
+
+    @Override
     public Node createPage(WizardController controller, int step, Map<String, Object> settings) {
         switch (step) {
-            case 0: return new ModpackTypeSelectionPage(controller);
-            case 1: return new ModpackInfoPage(controller, version);
-            case 2: return new ModpackFileSelectionPage(controller, profile, version, ModAdviser::suggestMod);
-            default: throw new IllegalArgumentException("step");
+            case 0:
+                return new ModpackTypeSelectionPage(controller);
+            case 1:
+                return new ModpackInfoPage(controller, version);
+            case 2:
+                return new ModpackFileSelectionPage(controller, profile, version, ModAdviser::suggestMod);
+            default:
+                throw new IllegalArgumentException("step");
         }
     }
 

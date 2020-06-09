@@ -1,6 +1,6 @@
 /*
  * Hello Minecraft! Launcher
- * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
+ * Copyright (C) 2020  huangyuhui <huanghongxun2008@126.com> and contributors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -18,13 +18,13 @@
 package org.jackhuang.hmcl.download.game;
 
 import org.jackhuang.hmcl.download.AbstractDependencyManager;
+import org.jackhuang.hmcl.download.ArtifactMalformedException;
 import org.jackhuang.hmcl.download.DefaultCacheRepository;
 import org.jackhuang.hmcl.game.Library;
 import org.jackhuang.hmcl.task.DownloadException;
 import org.jackhuang.hmcl.task.FileDownloadTask;
 import org.jackhuang.hmcl.task.FileDownloadTask.IntegrityCheck;
 import org.jackhuang.hmcl.task.Task;
-import org.jackhuang.hmcl.util.Logging;
 import org.jackhuang.hmcl.util.io.FileUtils;
 import org.jackhuang.hmcl.util.io.IOUtils;
 import org.jackhuang.hmcl.util.io.NetworkUtils;
@@ -32,23 +32,22 @@ import org.tukaani.xz.XZInputStream;
 
 import java.io.*;
 import java.net.URL;
-import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
-import java.util.jar.JarEntry;
-import java.util.jar.JarInputStream;
-import java.util.jar.JarOutputStream;
-import java.util.jar.Pack200;
+import java.util.jar.*;
 import java.util.logging.Level;
 
 import static org.jackhuang.hmcl.util.DigestUtils.digest;
 import static org.jackhuang.hmcl.util.Hex.encodeHex;
+import static org.jackhuang.hmcl.util.Logging.LOG;
 
 public class LibraryDownloadTask extends Task<Void> {
     private FileDownloadTask task;
     protected final File jar;
     protected final DefaultCacheRepository cacheRepository;
+    protected final AbstractDependencyManager dependencyManager;
     private final File xzFile;
     protected final Library library;
     protected final String url;
@@ -57,6 +56,7 @@ public class LibraryDownloadTask extends Task<Void> {
     private boolean cached = false;
 
     public LibraryDownloadTask(AbstractDependencyManager dependencyManager, File file, Library library) {
+        this.dependencyManager = dependencyManager;
         this.originalLibrary = library;
 
         setSignificance(TaskSignificance.MODERATE);
@@ -67,7 +67,7 @@ public class LibraryDownloadTask extends Task<Void> {
         this.library = library;
         this.cacheRepository = dependencyManager.getCacheRepository();
 
-        url = dependencyManager.getDownloadProvider().injectURL(library.getDownload().getUrl());
+        url = library.getDownload().getUrl();
         jar = file;
 
         xzFile = new File(file.getAbsoluteFile().getParentFile(), file.getName() + ".pack.xz");
@@ -111,7 +111,7 @@ public class LibraryDownloadTask extends Task<Void> {
     }
 
     @Override
-    public void preExecute() throws Exception {
+    public void preExecute() {
         Optional<Path> libPath = cacheRepository.getLibrary(originalLibrary);
         if (libPath.isPresent()) {
             try {
@@ -119,30 +119,42 @@ public class LibraryDownloadTask extends Task<Void> {
                 cached = true;
                 return;
             } catch (IOException e) {
-                Logging.LOG.log(Level.WARNING, "Failed to copy file from cache", e);
+                LOG.log(Level.WARNING, "Failed to copy file from cache", e);
                 // We cannot copy cached file to current location
                 // so we try to download a new one.
             }
         }
 
-        try {
-            URL packXz = NetworkUtils.toURL(url + ".pack.xz");
-            if (NetworkUtils.urlExists(packXz)) {
-                task = new FileDownloadTask(packXz, xzFile, null)
-                        .setCacheRepository(cacheRepository)
-                        .setCaching(true);
-                xz = true;
-            } else {
-                task = new FileDownloadTask(NetworkUtils.toURL(url),
-                        jar,
-                        library.getDownload().getSha1() != null ? new IntegrityCheck("SHA-1", library.getDownload().getSha1()) : null)
-                        .setCacheRepository(cacheRepository)
-                        .setCaching(true);
-                xz = false;
-            }
-        } catch (IOException e) {
-            throw new LibraryDownloadException(library, e);
+        if (testURLExistence(url)) {
+            List<URL> urls = dependencyManager.getDownloadProvider().injectURLWithCandidates(url + ".pack.xz");
+            task = new FileDownloadTask(urls, xzFile, null);
+            task.setCacheRepository(cacheRepository);
+            task.setCaching(true);
+            xz = true;
+        } else {
+            List<URL> urls = dependencyManager.getDownloadProvider().injectURLWithCandidates(url);
+            task = new FileDownloadTask(urls, jar,
+                    library.getDownload().getSha1() != null ? new IntegrityCheck("SHA-1", library.getDownload().getSha1()) : null);
+            task.setCacheRepository(cacheRepository);
+            task.setCaching(true);
+            task.addIntegrityCheckHandler(FileDownloadTask.ZIP_INTEGRITY_CHECK_HANDLER);
+            xz = false;
         }
+    }
+
+    private boolean testURLExistence(String rawUrl) {
+        List<URL> urls = dependencyManager.getDownloadProvider().injectURLWithCandidates(rawUrl);
+        for (URL url : urls) {
+            URL xzURL = NetworkUtils.toURL(url.toString() + ".pack.xz");
+            for (int retry = 0; retry < 3; retry++) {
+                try {
+                    return NetworkUtils.urlExists(xzURL);
+                } catch (IOException e) {
+                    LOG.log(Level.WARNING, "Failed to test for url existence: " + rawUrl + ".pack.xz", e);
+                }
+            }
+        }
+        return false; // maybe some ugly implementation will give timeout for not existent url.
     }
 
     @Override
@@ -181,7 +193,7 @@ public class LibraryDownloadTask extends Task<Void> {
         while (entry != null) {
             byte[] eData = IOUtils.readFullyWithoutClosing(jar);
             if (entry.getName().equals("checksums.sha1")) {
-                hashes = new String(eData, Charset.forName("UTF-8")).split("\n");
+                hashes = new String(eData, StandardCharsets.UTF_8).split("\n");
             }
             if (!entry.isDirectory()) {
                 files.put(entry.getName(), encodeHex(digest("SHA-1", eData)));
@@ -199,11 +211,11 @@ public class LibraryDownloadTask extends Task<Void> {
                         String target = hash.substring(validChecksum.length() + 1);
                         String checksum = files.get(target);
                         if ((!files.containsKey(target)) || (checksum == null)) {
-                            Logging.LOG.warning("    " + target + " : missing");
+                            LOG.warning("    " + target + " : missing");
                             failed = true;
                             break;
                         } else if (!checksum.equals(validChecksum)) {
-                            Logging.LOG.warning("    " + target + " : failed (" + checksum + ", " + validChecksum + ")");
+                            LOG.warning("    " + target + " : failed (" + checksum + ", " + validChecksum + ")");
                             failed = true;
                             break;
                         }
@@ -220,7 +232,12 @@ public class LibraryDownloadTask extends Task<Void> {
             if (!dest.delete())
                 throw new IOException("Unable to delete file " + dest);
 
-        byte[] decompressed = IOUtils.readFullyAsByteArray(new XZInputStream(new ByteArrayInputStream(src)));
+        byte[] decompressed;
+        try {
+            decompressed = IOUtils.readFullyAsByteArray(new XZInputStream(new ByteArrayInputStream(src)));
+        } catch (IOException e) {
+            throw new ArtifactMalformedException("Library " + dest + " is malformed");
+        }
 
         String end = new String(decompressed, decompressed.length - 4, 4);
         if (!end.equals("SIGN"))

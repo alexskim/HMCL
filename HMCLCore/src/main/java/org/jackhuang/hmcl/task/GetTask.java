@@ -1,6 +1,6 @@
 /*
  * Hello Minecraft! Launcher
- * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
+ * Copyright (C) 2020  huangyuhui <huanghongxun2008@126.com> and contributors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,23 +17,15 @@
  */
 package org.jackhuang.hmcl.task;
 
-import org.jackhuang.hmcl.util.CacheRepository;
-import org.jackhuang.hmcl.util.Logging;
 import org.jackhuang.hmcl.util.io.FileUtils;
-import org.jackhuang.hmcl.util.io.IOUtils;
-import org.jackhuang.hmcl.util.io.NetworkUtils;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.io.InputStream;
-import java.net.HttpURLConnection;
 import java.net.URL;
+import java.net.URLConnection;
 import java.nio.charset.Charset;
 import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.logging.Level;
+import java.util.*;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
 
@@ -41,88 +33,56 @@ import static java.nio.charset.StandardCharsets.UTF_8;
  *
  * @author huangyuhui
  */
-public final class GetTask extends Task<String> {
+public final class GetTask extends FetchTask<String> {
 
-    private final List<URL> urls;
     private final Charset charset;
-    private final int retry;
-    private CacheRepository repository = CacheRepository.getInstance();
 
     public GetTask(URL url) {
         this(url, UTF_8);
     }
 
     public GetTask(URL url, Charset charset) {
-        this(url, charset, 5);
+        this(url, charset, 3);
     }
 
     public GetTask(URL url, Charset charset, int retry) {
-        this.urls = Collections.singletonList(url);
-        this.charset = charset;
-        this.retry = retry;
-
-        setName(url.toString());
-        setExecutor(Schedulers.io());
+        this(Collections.singletonList(url), charset, retry);
     }
 
-    public GetTask(List<URL> urls, Charset charset) {
-        this.urls = new ArrayList<>(urls);
+    public GetTask(List<URL> url) {
+        this(url, UTF_8, 3);
+    }
+
+    public GetTask(List<URL> urls, Charset charset, int retry) {
+        super(urls, retry);
         this.charset = charset;
-        this.retry = urls.size();
 
         setName(urls.get(0).toString());
-        setExecutor(Schedulers.io());
-    }
-
-    public GetTask setCacheRepository(CacheRepository repository) {
-        this.repository = repository;
-        return this;
     }
 
     @Override
-    public void execute() throws Exception {
-        Exception exception = null;
-        boolean checkETag = true;
-        for (int time = 0; time < retry; ++time) {
-            URL url = urls.get(time % urls.size());
-            try {
-                updateProgress(0);
-                HttpURLConnection conn = NetworkUtils.createConnection(url);
-                if (checkETag) repository.injectConnection(conn);
-                conn = NetworkUtils.resolveConnection(conn);
+    protected EnumCheckETag shouldCheckETag() {
+        return EnumCheckETag.CHECK_E_TAG;
+    }
 
-                if (conn.getResponseCode() == HttpURLConnection.HTTP_NOT_MODIFIED) {
-                    // Handle cache
-                    try {
-                        Path cache = repository.getCachedRemoteFile(conn);
-                        setResult(FileUtils.readText(cache));
-                        return;
-                    } catch (IOException e) {
-                        Logging.LOG.log(Level.WARNING, "Unable to use cached file, redownload it", e);
-                        repository.removeRemoteEntry(conn);
-                        continue;
-                    }
-                } else if (conn.getResponseCode() / 100 != 2) {
-                    throw new IOException("Server error, response code: " + conn.getResponseCode());
-                }
+    @Override
+    protected void useCachedResult(Path cachedFile) throws IOException {
+        setResult(FileUtils.readText(cachedFile));
+    }
 
-                InputStream input = conn.getInputStream();
-                ByteArrayOutputStream baos = new ByteArrayOutputStream();
-                byte[] buf = new byte[IOUtils.DEFAULT_BUFFER_SIZE];
-                int size = conn.getContentLength(), read = 0, len;
-                while ((len = input.read(buf)) != -1) {
-                    baos.write(buf, 0, len);
-                    read += len;
+    @Override
+    protected Context getContext(URLConnection conn, boolean checkETag) {
+        return new Context() {
+            final ByteArrayOutputStream baos = new ByteArrayOutputStream();
 
-                    if (size >= 0)
-                        updateProgress(read, size);
+            @Override
+            public void write(byte[] buffer, int offset, int len) {
+                baos.write(buffer, offset, len);
+            }
 
-                    if (Thread.currentThread().isInterrupted())
-                        return;
-                }
-
-                if (size > 0 && size != read)
-                    throw new IOException("Not completed! Readed: " + read + ", total size: " + size);
+            @Override
+            public void close() throws IOException {
+                if (!isSuccess()) return;
 
                 String result = baos.toString(charset.name());
                 setResult(result);
@@ -130,14 +90,8 @@ public final class GetTask extends Task<String> {
                 if (checkETag) {
                     repository.cacheText(result, conn);
                 }
-                return;
-            } catch (IOException ex) {
-                exception = ex;
-                Logging.LOG.log(Level.WARNING, "Failed to download " + url + ", repeat times: " + time + 1, ex);
             }
-        }
-        if (exception != null)
-            throw new DownloadException(urls.get(0), exception);
+        };
     }
 
 }

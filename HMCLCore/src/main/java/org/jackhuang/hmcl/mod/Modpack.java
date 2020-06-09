@@ -1,6 +1,6 @@
 /*
  * Hello Minecraft! Launcher
- * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
+ * Copyright (C) 2020  huangyuhui <huanghongxun2008@126.com> and contributors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -93,6 +93,8 @@ public final class Modpack {
         for (String s : blackList)
             if (path.equals(s))
                 return false;
+        if (whiteList == null || whiteList.isEmpty())
+            return true;
         for (String s : whiteList)
             if (path.equals(s))
                 return true;

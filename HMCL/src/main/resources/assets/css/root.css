@@ -1,6 +1,6 @@
 /**
  * Hello Minecraft! Launcher
- * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
+ * Copyright (C) 2020  huangyuhui <huanghongxun2008@126.com> and contributors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -18,15 +18,14 @@
 .root {
 }
 
-.disabled Label {
-    -fx-text-fill: gray;
+.scroll-bar .thumb {
+    -fx-fill: rgba(255, 255, 255, 0.5);
+    -fx-arc-width: 5px;
+    -fx-arc-height: 5px;
 }
 
-.side-menu {
-    -fx-padding: 20.0, 10.0;
-    -fx-font-size: 15.0;
-    -fx-font-weight: NORMAL;
-    -fx-text-fill: #444;
+.disabled Label {
+    -fx-text-fill: rgba(0, 0, 0, 0.5);
 }
 
 .title-label {
@@ -36,7 +35,7 @@
 }
 
 .subtitle-label {
-    -fx-text-fill: gray;
+    -fx-text-fill: rgba(0, 0, 0, 0.5);
 }
 
 .update-label {
@@ -55,6 +54,10 @@
 
 .rippler-container:selected .label {
     -fx-text-fill: -fx-base-text-fill;
+}
+
+.advanced-list-item:selected .container {
+    -fx-background-color: -fx-base-rippler-color;
 }
 
 .notice-pane > .label {
@@ -103,21 +106,25 @@
     -fx-padding: 8 16 8 16;
 }
 
-.menu {
+.popup-menu .scroll-bar .thumb {
+    -fx-fill: rgba(0, 0, 0, 0.5);
+}
+
+.popup-menu .content {
     -fx-padding: 4 0 4 0;
 }
 
 .two-line-list-item > .title {
-	-fx-text-fill: black;
+	-fx-text-fill: #292929;
 	-fx-font-size: 15px;
 }
 
 .two-line-list-item > .subtitle {
-	-fx-text-fill: gray;
+	-fx-text-fill: rgba(0, 0, 0, 0.5);
 }
 
 .bubble {
-    -fx-background-color: gray;
+    -fx-background-color: rgba(0, 0, 0, 0.5);
     -fx-background-radius: 2px;
     -fx-text-fill: white;
 }
@@ -127,22 +134,39 @@
 	-fx-text-fill: white;
 }
 
-.window-title-bar .separator {
-    -fx-fill: -fx-base-darker-color;
-}
-
-.darker-fill {
-    -fx-fill: -fx-base-darker-color;
-}
-
 .sponsor-pane {
     -fx-padding: 16;
-    -fx-background-color: white;
     -fx-cursor: hand;
 }
 
 .sponsor-pane .label {
     -fx-wrap-text: true;
+}
+
+/*******************************************************************************
+ *                                                                             *
+ * Main Page                                                                   *
+ *                                                                             *
+ ******************************************************************************/
+
+.launch-pane .jfx-button {
+    -fx-background-color: -fx-base-color;
+    -fx-cursor: hand;
+}
+
+.launch-pane .jfx-button .jfx-rippler {
+    -jfx-rippler-fill: white;
+    -jfx-mask-type: CIRCLE;
+    -fx-padding: 0.0;
+}
+
+.launch-pane .jfx-button, .jfx-button * {
+    -fx-text-fill: -fx-base-text-fill;
+    -fx-font-size: 14px;
+}
+
+.launch-pane Rectangle {
+    -fx-fill: -fx-base-darker-color;
 }
 
 /*******************************************************************************
@@ -164,7 +188,6 @@
 }
 
 .tab-label {
-    -fx-font-family: "Roboto";
     -fx-font-size: 16;
 }
 
@@ -253,6 +276,7 @@
 
 .jfx-popup-container {
     -fx-background-color: WHITE;
+    -fx-background-radius: 4;
 }
 
 .popup-list-view {
@@ -347,19 +371,37 @@
 
 .jfx-tool-bar {
     -fx-font-size: 13.0;
-    -fx-font-weight: BOLD;
-    -fx-background-color: -fx-base-color;
     -fx-pref-width: 100.0%;
-    -fx-pref-height: 32.0px;
+    -fx-min-height: 40px;
+    -fx-max-height: 40px;
+    -fx-pref-height: 40px;
+}
+
+.jfx-tool-bar .jfx-decorator-title {
+    -fx-font-weight: BOLD;
+}
+
+.jfx-tool-bar .background {
+    -fx-background-color: -fx-base-color;
 }
 
 .jfx-tool-bar HBox {
-    -fx-alignment: center;
+    -fx-alignment: center-left;
     -fx-padding: 0.0 5.0;
 }
 
 .jfx-tool-bar .jfx-decorator-button {
+    -fx-min-width: 40px;
+    -fx-max-width: 40px;
+    -fx-pref-width: 40px;
+    -fx-min-height: 40px;
+    -fx-max-height: 40px;
+    -fx-pref-height: 40px;
     -fx-cursor: hand;
+}
+
+.jfx-tool-bar .jfx-decorator-button .svg {
+    -fx-fill: -fx-base-text-fill;
 }
 
 .jfx-tool-bar Label {
@@ -412,9 +454,9 @@
 }
 
 .jfx-decorator-button {
-    -fx-max-width: 35px;
+    -fx-max-width: 40px;
     -fx-background-radius: 5px;
-    -fx-max-height: 35px;
+    -fx-max-height: 40px;
     -fx-background-color: transparent;
     -jfx-toggle-color: rgba(128, 128, 255, 0.2);
     -jfx-untoggle-color: transparent;
@@ -522,6 +564,12 @@
     -fx-cursor: hand;
 }
 
+.jfx-button .jfx-rippler {
+    -jfx-rippler-fill: -fx-base-check-color;
+    -jfx-mask-type: CIRCLE;
+    -fx-padding: 0.0;
+}
+
 .jfx-button-raised {
     -fx-background-color: -fx-base-color;
 }
@@ -614,7 +662,8 @@
 *******************************************************************************/
 
 .jfx-list-cell, .list-cell {
-    -fx-background-color: WHITE;
+    /*-fx-background-color: WHITE;*/
+    -fx-background-color: transparent;
 }
 
 .list-cell:selected, .jfx-list-cell:selected,
@@ -637,6 +686,24 @@
     -jfx-cell-vertical-margin: 5.0;
     -jfx-vertical-gap: 10.0;
     -jfx-expanded: false;
+    -fx-background-color: transparent;
+}
+
+.jfx-list-view .scroll-bar {
+    -fx-skin: "org.jackhuang.hmcl.ui.construct.FloatScrollBarSkin";
+}
+
+.jfx-list-view .scroll-bar .track {
+    -fx-fill: transparent;
+}
+
+.jfx-list-view-float {
+    -fx-background-insets: 0.0;
+    -jfx-cell-horizontal-margin: 0.0;
+    -jfx-cell-vertical-margin: 5.0;
+    -jfx-vertical-gap: 10.0;
+    -jfx-expanded: false;
+    -fx-background-color: transparent;
 }
 
 .options-list {
@@ -645,7 +712,13 @@
 }
 
 .card {
-    -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.26), 5, 0.06, -0.5, 1);
+    -fx-background-color: WHITE;
+    -fx-background-radius: 4;
+    -fx-padding: 8px;
+}
+
+.card:selected {
+    -fx-background-color: derive(-fx-base-color, 60%);
 }
 
 .options-sublist {
@@ -661,6 +734,16 @@
 }
 
 .options-list-item:first {
+    -fx-background-radius: 4 4 0 0;
+    -fx-border-width: 0;
+}
+
+.options-list-item:last {
+    -fx-background-radius: 0 0 4 4;
+}
+
+.options-list-item:first:last {
+    -fx-background-radius: 4 4 4 4;
     -fx-border-width: 0;
 }
 
@@ -852,6 +935,12 @@
     -fx-background-color: null;
 }
 
+/*******************************************************************************
+*                                                                              *
+* Log Window                                                                   *
+*                                                                              *
+*******************************************************************************/
+
 .log-toggle:selected {
     -fx-background-color: transparent;
     -fx-border: 1px;
@@ -864,6 +953,44 @@
     -fx-border: 1px;
     -fx-border-color: gray;
     -fx-text-fill: gray;
+}
+
+.log-window .scroll-bar .thumb {
+    -fx-fill: rgba(0, 0, 0, 0.5);
+}
+
+.log-window .list-cell {
+    -fx-text-fill: black;
+    -fx-border-width: 0 0 1 0;
+    -fx-border-color: #dddddd;
+}
+
+.log-window .list-cell:empty {
+    -fx-border-width: 0;
+}
+
+.log-window .list-cell:fatal {
+    -fx-background-color: #F7A699;
+}
+
+.log-window .list-cell:error {
+    -fx-background-color: #FFCCBB;
+}
+
+.log-window .list-cell:warn {
+    -fx-background-color: #FFEECC;
+}
+
+.log-window .list-cell:info {
+    -fx-background-color: #FFFFFF;
+}
+
+.log-window .list-cell:debug {
+    -fx-background-color: #EEE9E0;
+}
+
+.log-window .list-cell:trace {
+    -fx-background-color: #EEE9E0;
 }
 
 /*******************************************************************************
@@ -995,26 +1122,41 @@
     -fx-decorator-color: -fx-base-color;
 }
 
-.jfx-decorator .jfx-decorator-buttons-container {
-    -fx-background-color: -fx-decorator-color;
-}
-
 .jfx-decorator-drawer {
+    -fx-background-color: rgba(244, 244, 244, 0.5);
 }
 
 .jfx-decorator-title {
     -fx-text-fill: -fx-base-text-fill;
-    -fx-font-size: 15;
+    -fx-font-size: 14;
 }
 
-.resize-border {
-    -fx-border-color: -fx-base-color;
-    -fx-border-width: 0 2 2 2;
+.jfx-decorator-title:transparent {
+    -fx-text-fill: black;
+}
+
+.jfx-decorator-tab .tab-container .tab-label {
+    -fx-text-fill: -fx-base-disabled-text-fill;
+    -fx-font-size: 14;
+}
+
+.jfx-decorator-tab .tab-container:selected .tab-label {
+    -fx-text-fill: -fx-base-text-fill;
+    -fx-font-weight: BOLD;
+}
+
+.window {
+    -fx-border-color: black;
+    -fx-border-width: 1;
 }
 
 .debug-border {
     -fx-border-color: red;
     -fx-border-width: 1;
+}
+
+.content-background {
+    -fx-background-color: rgba(244, 244, 244, 0.5);
 }
 
 .gray-background {
@@ -1205,6 +1347,14 @@
 .scroll-pane > .viewport {
     -fx-background-color: null;
  }
+
+.scroll-pane .scroll-bar {
+    -fx-skin: "org.jackhuang.hmcl.ui.construct.FloatScrollBarSkin";
+}
+
+.scroll-pane .scroll-bar .track {
+    -fx-fill: transparent;
+}
 
 /*******************************************************************************
 *                                                                              *

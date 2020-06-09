@@ -1,6 +1,6 @@
 /*
  * Hello Minecraft! Launcher
- * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
+ * Copyright (C) 2020  huangyuhui <huanghongxun2008@126.com> and contributors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -18,8 +18,13 @@
 package org.jackhuang.hmcl.game;
 
 import com.google.gson.JsonParseException;
+import org.jackhuang.hmcl.util.DigestUtils;
+import org.jackhuang.hmcl.util.Hex;
 import org.jackhuang.hmcl.util.StringUtils;
 import org.jackhuang.hmcl.util.gson.Validation;
+
+import java.io.IOException;
+import java.nio.file.Path;
 
 /**
  *
@@ -55,5 +60,10 @@ public final class AssetObject implements Validation {
     public void validate() throws JsonParseException {
         if (StringUtils.isBlank(hash) || hash.length() < 2)
             throw new JsonParseException("AssetObject hash cannot be blank.");
+    }
+
+    public boolean validateChecksum(Path file, boolean defaultValue) throws IOException {
+        if (hash == null) return defaultValue;
+        return Hex.encodeHex(DigestUtils.digest("SHA-1", file)).equalsIgnoreCase(hash);
     }
 }

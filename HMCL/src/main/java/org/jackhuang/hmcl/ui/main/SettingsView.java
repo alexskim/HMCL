@@ -1,6 +1,6 @@
 /*
  * Hello Minecraft! Launcher
- * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
+ * Copyright (C) 2020  huangyuhui <huanghongxun2008@126.com> and contributors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -15,7 +15,7 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-package org.jackhuang.hmcl.ui;
+package org.jackhuang.hmcl.ui.main;
 
 import com.jfoenix.controls.*;
 import javafx.geometry.HPos;
@@ -31,6 +31,8 @@ import javafx.scene.text.TextAlignment;
 import org.jackhuang.hmcl.setting.EnumBackgroundImage;
 import org.jackhuang.hmcl.setting.EnumCommonDirectory;
 import org.jackhuang.hmcl.setting.Theme;
+import org.jackhuang.hmcl.ui.FXUtils;
+import org.jackhuang.hmcl.ui.SVG;
 import org.jackhuang.hmcl.ui.construct.*;
 import org.jackhuang.hmcl.util.i18n.Locales.SupportedLocale;
 
@@ -73,7 +75,7 @@ public abstract class SettingsView extends StackPane {
 
         {
             VBox rootPane = new VBox();
-            rootPane.setPadding(new Insets(36, 18, 36, 18));
+            rootPane.setPadding(new Insets(32, 10, 32, 10));
             {
                 ComponentList settingsPane = new ComponentList();
                 {
@@ -108,7 +110,9 @@ public abstract class SettingsView extends StackPane {
                         sponsorPane.getChildren().setAll(gridPane);
                         settingsPane.getContent().add(sponsorPane);
                     }
+                }
 
+                {
                     ComponentSublist updatePane = new ComponentSublist();
                     updatePane.setTitle(i18n("update"));
                     updatePane.setHasSubtitle(true);
@@ -152,7 +156,7 @@ public abstract class SettingsView extends StackPane {
                 }
 
                 {
-                    BorderPane updatePane = new BorderPane();
+                    BorderPane docPane = new BorderPane();
                     {
                         VBox headerLeft = new VBox();
 
@@ -161,7 +165,7 @@ public abstract class SettingsView extends StackPane {
                         helpSubtitle.getStyleClass().add("subtitle-label");
 
                         headerLeft.getChildren().setAll(help, helpSubtitle);
-                        updatePane.setLeft(headerLeft);
+                        docPane.setLeft(headerLeft);
                     }
 
                     {
@@ -170,9 +174,9 @@ public abstract class SettingsView extends StackPane {
                         btnExternal.getStyleClass().add("toggle-icon4");
                         btnExternal.setGraphic(SVG.openInNew(Theme.blackFillBinding(), -1, -1));
 
-                        updatePane.setRight(btnExternal);
+                        docPane.setRight(btnExternal);
                     }
-                    settingsPane.getContent().add(updatePane);
+                    settingsPane.getContent().add(docPane);
                 }
 
                 {
@@ -182,6 +186,14 @@ public abstract class SettingsView extends StackPane {
                     fileCommonLocation.setChooserTitle(i18n("launcher.cache_directory.choose"));
                     fileCommonLocation.setHasSubtitle(true);
                     fileCommonLocation.setCustomText("settings.custom");
+
+                    {
+                        JFXButton cleanButton = new JFXButton(i18n("launcher.cache_directory.clean"));
+                        cleanButton.setOnMouseClicked(e -> clearCacheDirectory());
+                        cleanButton.getStyleClass().add("jfx-button-border");
+
+                        fileCommonLocation.setHeaderRight(cleanButton);
+                    }
 
                     settingsPane.getContent().add(fileCommonLocation);
                 }
@@ -526,4 +538,5 @@ public abstract class SettingsView extends StackPane {
     protected abstract void onHelp();
     protected abstract void onExportLogs();
     protected abstract void onSponsor();
+    protected abstract void clearCacheDirectory();
 }

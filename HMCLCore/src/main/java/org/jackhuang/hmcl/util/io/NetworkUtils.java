@@ -1,6 +1,6 @@
 /*
  * Hello Minecraft! Launcher
- * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
+ * Copyright (C) 2020  huangyuhui <huanghongxun2008@126.com> and contributors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,6 +20,7 @@ package org.jackhuang.hmcl.util.io;
 import java.io.*;
 import java.net.*;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Map.Entry;
 
@@ -54,12 +55,17 @@ public final class NetworkUtils {
         return sb.toString();
     }
 
-    public static HttpURLConnection createConnection(URL url) throws IOException {
-        HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+    public static URLConnection createConnection(URL url) throws IOException {
+        URLConnection connection = url.openConnection();
         connection.setUseCaches(false);
         connection.setConnectTimeout(15000);
         connection.setReadTimeout(15000);
+        connection.setRequestProperty("Accept-Language", Locale.getDefault().toString());
         return connection;
+    }
+
+    public static HttpURLConnection createHttpConnection(URL url) throws IOException {
+        return (HttpURLConnection) createConnection(url);
     }
 
     /**
@@ -106,6 +112,7 @@ public final class NetworkUtils {
             conn.setReadTimeout(15000);
             conn.setInstanceFollowRedirects(false);
             Map<String, List<String>> properties = conn.getRequestProperties();
+            String method = conn.getRequestMethod();
             int code = conn.getResponseCode();
             if (code >= 300 && code <= 307 && code != 306 && code != 304) {
                 String newURL = conn.getHeaderField("Location");
@@ -117,6 +124,7 @@ public final class NetworkUtils {
 
                 HttpURLConnection redirected = (HttpURLConnection) new URL(conn.getURL(), encodeLocation(newURL)).openConnection();
                 properties.forEach((key, value) -> value.forEach(element -> redirected.addRequestProperty(key, element)));
+                redirected.setRequestMethod(method);
                 conn = redirected;
                 ++redirect;
             } else {
@@ -127,7 +135,9 @@ public final class NetworkUtils {
     }
 
     public static String doGet(URL url) throws IOException {
-        return IOUtils.readFullyAsString(createConnection(url).getInputStream());
+        HttpURLConnection con = createHttpConnection(url);
+        con = resolveConnection(con);
+        return IOUtils.readFullyAsString(con.getInputStream());
     }
 
     public static String doPost(URL u, Map<String, String> params) throws IOException {
@@ -147,7 +157,7 @@ public final class NetworkUtils {
     public static String doPost(URL url, String post, String contentType) throws IOException {
         byte[] bytes = post.getBytes(UTF_8);
 
-        HttpURLConnection con = createConnection(url);
+        HttpURLConnection con = createHttpConnection(url);
         con.setRequestMethod("POST");
         con.setDoOutput(true);
         con.setRequestProperty("Content-Type", contentType + "; charset=utf-8");
@@ -172,7 +182,7 @@ public final class NetworkUtils {
     }
 
     public static String detectFileName(URL url) throws IOException {
-        HttpURLConnection conn = resolveConnection(createConnection(url));
+        HttpURLConnection conn = resolveConnection(createHttpConnection(url));
         int code = conn.getResponseCode();
         if (code / 100 == 4)
             throw new FileNotFoundException();
@@ -210,11 +220,11 @@ public final class NetworkUtils {
     }
 
     public static boolean urlExists(URL url) throws IOException {
-        try (InputStream stream = url.openStream()) {
-            return true;
-        } catch (FileNotFoundException e) {
-            return false;
-        }
+        HttpURLConnection con = createHttpConnection(url);
+        con = resolveConnection(con);
+        int responseCode = con.getResponseCode();
+        con.disconnect();
+        return responseCode / 100 == 2;
     }
 
     // ==== Shortcut methods for encoding/decoding URLs in UTF-8 ====

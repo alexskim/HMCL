@@ -1,6 +1,6 @@
 /*
  * Hello Minecraft! Launcher
- * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
+ * Copyright (C) 2020  huangyuhui <huanghongxun2008@126.com> and contributors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -22,7 +22,7 @@ import javafx.application.Platform;
 import javafx.stage.Stage;
 import org.jackhuang.hmcl.setting.ConfigHolder;
 import org.jackhuang.hmcl.task.Schedulers;
-import org.jackhuang.hmcl.task.TaskExecutor;
+import org.jackhuang.hmcl.task.AsyncTaskExecutor;
 import org.jackhuang.hmcl.ui.Controllers;
 import org.jackhuang.hmcl.upgrade.UpdateChecker;
 import org.jackhuang.hmcl.util.CrashReporter;
@@ -64,8 +64,6 @@ public final class Launcher extends Application {
                 // Stage.show() cannot work again because JavaFX Toolkit have already shut down.
                 Platform.setImplicitExit(false);
                 Controllers.initialize(primaryStage);
-                primaryStage.setResizable(false);
-                primaryStage.setScene(Controllers.getScene());
 
                 UpdateChecker.init();
 
@@ -76,9 +74,15 @@ public final class Launcher extends Application {
         }
     }
 
+    @Override
+    public void stop() throws Exception {
+        super.stop();
+        Controllers.onApplicationStop();
+    }
+
     public static void main(String[] args) {
         Thread.setDefaultUncaughtExceptionHandler(CRASH_REPORTER);
-        TaskExecutor.setUncaughtExceptionHandler(new CrashReporter(false));
+        AsyncTaskExecutor.setUncaughtExceptionHandler(new CrashReporter(false));
 
         try {
             LOG.info("*** " + Metadata.TITLE + " ***");
@@ -108,7 +112,6 @@ public final class Launcher extends Application {
             Schedulers.shutdown();
             Controllers.shutdown();
             Platform.exit();
-            Lang.executeDelayed(OperatingSystem::forceGC, TimeUnit.SECONDS, 5, true);
         });
     }
 

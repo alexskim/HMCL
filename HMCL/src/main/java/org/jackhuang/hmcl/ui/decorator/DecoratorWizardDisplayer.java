@@ -1,6 +1,6 @@
 /*
  * Hello Minecraft! Launcher
- * Copyright (C) 2019  huangyuhui <huanghongxun2008@126.com> and contributors
+ * Copyright (C) 2020  huangyuhui <huanghongxun2008@126.com> and contributors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,30 +17,20 @@
  */
 package org.jackhuang.hmcl.ui.decorator;
 
-import javafx.beans.property.BooleanProperty;
-import javafx.beans.property.SimpleBooleanProperty;
-import javafx.beans.property.SimpleStringProperty;
-import javafx.beans.property.StringProperty;
 import javafx.scene.Node;
-import javafx.scene.layout.StackPane;
-import org.jackhuang.hmcl.ui.animation.TransitionHandler;
+import javafx.scene.control.SkinBase;
+import org.jackhuang.hmcl.ui.construct.Navigator;
 import org.jackhuang.hmcl.ui.construct.PageCloseEvent;
 import org.jackhuang.hmcl.ui.wizard.*;
 
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
-public class DecoratorWizardDisplayer extends StackPane implements TaskExecutorDialogWizardDisplayer, Refreshable, DecoratorPage {
-    private final StringProperty title = new SimpleStringProperty();
-    private final BooleanProperty canRefresh = new SimpleBooleanProperty();
-
-    private final TransitionHandler transitionHandler = new TransitionHandler(this);
+public class DecoratorWizardDisplayer extends DecoratorTransitionPage implements TaskExecutorDialogWizardDisplayer {
     private final WizardController wizardController = new WizardController(this);
     private final Queue<Object> cancelQueue = new ConcurrentLinkedQueue<>();
 
     private final String category;
-
-    private Node nowPage;
 
     public DecoratorWizardDisplayer(WizardProvider provider) {
         this(provider, null);
@@ -52,17 +42,7 @@ public class DecoratorWizardDisplayer extends StackPane implements TaskExecutorD
         wizardController.setProvider(provider);
         wizardController.onStart();
 
-        getStyleClass().add("white-background");
-    }
-
-    @Override
-    public StringProperty titleProperty() {
-        return title;
-    }
-
-    @Override
-    public BooleanProperty canRefreshProperty() {
-        return canRefresh;
+        addEventHandler(Navigator.NavigationEvent.NAVIGATED, this::onDecoratorPageNavigating);
     }
 
     @Override
@@ -87,30 +67,37 @@ public class DecoratorWizardDisplayer extends StackPane implements TaskExecutorD
 
     @Override
     public void navigateTo(Node page, Navigation.NavigationDirection nav) {
-        nowPage = page;
-
-        transitionHandler.setContent(page, nav.getAnimation().getAnimationProducer());
-
-        canRefresh.set(page instanceof Refreshable);
+        navigate(page, nav.getAnimation().getAnimationProducer());
 
         String prefix = category == null ? "" : category + " - ";
 
+        String title;
         if (page instanceof WizardPage)
-            title.set(prefix + ((WizardPage) page).getTitle());
+            title = prefix + ((WizardPage) page).getTitle();
+        else
+            title = "";
+        state.set(new State(title, null, true, refreshableProperty().get(), true));
+
+        if (page instanceof Refreshable) {
+            refreshableProperty().bind(((Refreshable) page).refreshableProperty());
+        } else {
+            refreshableProperty().unbind();
+            refreshableProperty().set(false);
+        }
     }
 
     @Override
-    public boolean canForceToClose() {
+    public boolean isPageCloseable() {
         return true;
     }
 
     @Override
-    public void onForceToClose() {
+    public void closePage() {
         wizardController.onCancel();
     }
 
     @Override
-    public boolean onClose() {
+    public boolean back() {
         if (wizardController.canPrev()) {
             wizardController.onPrev(true);
             return false;
@@ -120,6 +107,20 @@ public class DecoratorWizardDisplayer extends StackPane implements TaskExecutorD
 
     @Override
     public void refresh() {
-        ((Refreshable) nowPage).refresh();
+        ((Refreshable) getCurrentPage()).refresh();
+    }
+
+    @Override
+    protected Skin createDefaultSkin() {
+        return new Skin(this);
+    }
+
+    private static class Skin extends SkinBase<DecoratorWizardDisplayer> {
+
+        protected Skin(DecoratorWizardDisplayer control) {
+            super(control);
+
+            getChildren().setAll(control.transitionPane);
+        }
     }
 }
